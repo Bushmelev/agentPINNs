@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pinn-accel"
+version = "0.1.0"
+description = "Minimal PINN training lab with pluggable equations, rewards, and agents."
+requires-python = ">=3.10"
+dependencies = [
+  "matplotlib",
+  "numpy",
+  "torch",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 96
+target-version = "py310"
