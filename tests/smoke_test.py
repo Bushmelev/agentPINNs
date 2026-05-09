@@ -18,7 +18,7 @@ def main() -> None:
         shutil.rmtree(out_dir)
     cfg = ExperimentConfig(
         equation="heat",
-        controllers=["fixed"],
+        controllers=["fixed", "tiny_loss_weight"],
         output_dir=str(out_dir),
         save_plots=False,
         model=ModelConfig(layers=[2, 8, 8, 1], activation="tanh"),
@@ -27,10 +27,12 @@ def main() -> None:
             batch_sizes={"pde": 16, "ic": 8, "bc": 8},
             pool_sizes={},
             log_every=1,
+            agent_update_interval=1,
         ),
     )
     run_dir = run_experiment(cfg)
     assert (run_dir / "heat" / "fixed" / "history.json").exists()
+    assert (run_dir / "heat" / "tiny_loss_weight" / "history.json").exists()
 
 
 if __name__ == "__main__":

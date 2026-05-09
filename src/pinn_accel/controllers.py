@@ -7,7 +7,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from .agents import BaseWeightAgent, make_agent
+from .agents import AGENT_NAMES, BaseWeightAgent, make_agent
 from .rewards import Reward, RewardContext, make_reward
 
 
@@ -54,7 +54,11 @@ class WeightController(nn.Module):
         device: torch.device,
     ) -> None:
         self.component_names = list(component_names)
-        weights = torch.tensor(normalize_weights(initial_weights), dtype=torch.float32, device=device)
+        weights = torch.tensor(
+            normalize_weights(initial_weights),
+            dtype=torch.float32,
+            device=device,
+        )
         self.base_weights = weights
         self.effective_weights = weights.clone()
         self._bind_state(device)
@@ -142,8 +146,14 @@ class ReLoBRaLoController(WeightController):
 
     def _bind_state(self, device: torch.device) -> None:
         n = len(self.component_names)
-        self.register_buffer("initial_losses", torch.zeros(n, dtype=torch.float32, device=device))
-        self.register_buffer("previous_losses", torch.zeros(n, dtype=torch.float32, device=device))
+        self.register_buffer(
+            "initial_losses",
+            torch.zeros(n, dtype=torch.float32, device=device),
+        )
+        self.register_buffer(
+            "previous_losses",
+            torch.zeros(n, dtype=torch.float32, device=device),
+        )
         self.register_buffer("lambda_ema", torch.ones(n, dtype=torch.float32, device=device))
 
     def objective(
@@ -379,7 +389,7 @@ def make_controller(
         return ReLoBRaLoController(**cfg)
     if value == "gradnorm":
         return GradNormController(**cfg)
-    if value in {"policy_gradient", "actor_critic"}:
+    if value in AGENT_NAMES:
         reward_name = str(cfg.pop("reward", "log_ratio"))
         reward_params = dict(cfg.pop("reward_params", {}))
         reward = make_reward(reward_name, reward_params)
@@ -394,7 +404,7 @@ def make_controller(
 
 
 def controller_needs_baseline(name: str, params: dict[str, Any]) -> bool:
-    if name.lower() not in {"policy_gradient", "actor_critic"}:
+    if name.lower() not in AGENT_NAMES:
         return False
     reward_name = str(params.get("reward", "log_ratio"))
     reward = make_reward(reward_name, params.get("reward_params", {}))

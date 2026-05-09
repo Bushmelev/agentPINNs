@@ -6,9 +6,12 @@ from pathlib import Path
 from typing import Any
 
 
+AGENT_CONTROLLER_NAMES = {"tiny_loss_weight", "tiny", "tiny_rl", "linear_rl"}
+
+
 @dataclass
 class ModelConfig:
-    layers: list[int] = field(default_factory=lambda: [2, 64, 64, 64, 1])
+    layers: list[int] = field(default_factory=lambda: [2, 40, 40, 40, 40, 1])
     activation: str = "tanh"
 
 
@@ -34,7 +37,7 @@ class TrainingConfig:
 class ExperimentConfig:
     equation: str = "burgers"
     equation_params: dict[str, Any] = field(default_factory=dict)
-    controllers: list[str] = field(default_factory=lambda: ["fixed", "actor_critic"])
+    controllers: list[str] = field(default_factory=lambda: ["fixed", "tiny_loss_weight"])
     seed: int = 1234
     device: str = "auto"
     output_dir: str = "artifacts"
@@ -93,7 +96,7 @@ class ExperimentConfig:
         if reward is not None:
             params = dict(data.get("controller_params", {}))
             for controller in data["controllers"]:
-                if controller in {"policy_gradient", "actor_critic"}:
+                if controller.lower() in AGENT_CONTROLLER_NAMES:
                     controller_cfg = dict(params.get(controller, {}))
                     controller_cfg["reward"] = reward
                     params[controller] = controller_cfg

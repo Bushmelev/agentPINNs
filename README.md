@@ -1,13 +1,13 @@
 # pinn_accel
 
-Минимальная версия проекта для быстрых экспериментов с PINN, весами loss-компонент и RL-агентами.
+Минимальная версия проекта для быстрых экспериментов с PINN, весами loss-компонент и компактным линейным RL-агентом.
 
 Что изменено относительно старой структуры:
 
 - `train.py` только читает конфиг/CLI и запускает эксперимент.
 - Уравнения лежат отдельно в `src/pinn_accel/equations`.
 - Награды агента лежат отдельно в `src/pinn_accel/rewards.py`.
-- Агенты лежат отдельно в `src/pinn_accel/agents`.
+- Агент лежит отдельно в `src/pinn_accel/agents`.
 - Сохранение истории, графиков и checkpoint-ов унифицировано через `ArtifactStore`.
 - В тренировочном цикле нет обязательной повторной оценки loss после каждого `optimizer.step()`, поэтому шаг обучения дешевле.
 - Для ускорения доступны фиксированные sampling pools и `torch.compile` через конфиг.
@@ -22,7 +22,7 @@ python3 -m venv .venv
 ```
 
 ```bash
-python train.py --config configs/burgers_actor_critic.json
+python train.py --config configs/burgers_tiny_loss_weight.json
 ```
 
 Быстрый smoke-run:
@@ -63,7 +63,7 @@ def residual(model, xt):
 ```json
 {
   "controller_params": {
-    "actor_critic": {
+    "tiny_loss_weight": {
       "reward": "relative_improvement"
     }
   }
@@ -72,7 +72,17 @@ def residual(model, xt):
 
 ## Изменить агента
 
-Агент должен наследоваться от `BaseWeightAgent` в `src/pinn_accel/agents/base.py` и реализовать:
+Текущий агент — `TinyLossWeightAgent` в `src/pinn_accel/agents/tiny.py`. Его состояние:
+
+- `log_losses`
+- `dlog_losses`
+- `log_lambdas`
+- `log(loss / initial_loss)`
+- `progress`
+
+Политика — один линейный слой `LinearRLPolicy` с нормальным шумом действия. При необходимости можно менять состав состояния в `BaseWeightAgent.make_state()`.
+
+Агент должен наследоваться от `BaseWeightAgent` и реализовать:
 
 - `select_action(state)`
 - `update(state, action, reward, next_state, done)`
