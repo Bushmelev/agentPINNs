@@ -174,6 +174,7 @@ def train_one(
         pool_sizes=train_cfg.pool_sizes,
         device=device,
         seed=seed,
+        full_batch=train_cfg.full_batch,
     )
     component_names = loss_evaluator.component_names
     model = MLP(model_cfg.layers, activation=model_cfg.activation).to(device)
@@ -186,6 +187,7 @@ def train_one(
     phases = _make_optimizer_phases(optimizer_params, train_cfg)
     total_steps = sum(phase.steps for phase in phases)
     history = _empty_history(component_names, controller.name)
+    history["batch_info"] = loss_evaluator.batch_info
     start_time = time.time()
     step = 0
 

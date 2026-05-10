@@ -28,13 +28,19 @@ def _save_result(
 ) -> None:
     method_dir = store.method_dir(spec.name, label)
     store.save_history(spec.name, label, result.history)
+    if result.history.get("batch_info") is not None:
+        store.save_json(method_dir / "batch_info.json", result.history["batch_info"])
     store.save_checkpoint(
         spec.name,
         label,
         {
             "equation": spec.name,
             "controller": label,
-            "model_config": cfg.model.to_dict() if hasattr(cfg.model, "to_dict") else cfg.model.__dict__,
+            "model_config": (
+                cfg.model.to_dict()
+                if hasattr(cfg.model, "to_dict")
+                else cfg.model.__dict__
+            ),
             "training_config": cfg.training.__dict__,
             "state_dict": result.model.state_dict(),
             "history": result.history,

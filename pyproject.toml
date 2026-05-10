@@ -8,6 +8,7 @@ version = "0.1.0"
 description = "Minimal PINN training lab with pluggable equations, rewards, and agents."
 requires-python = ">=3.10"
 dependencies = [
+  "h5py",
   "matplotlib",
   "numpy",
   "torch",

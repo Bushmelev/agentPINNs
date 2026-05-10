@@ -18,6 +18,7 @@ class ModelConfig:
 @dataclass
 class TrainingConfig:
     steps: int = 1000
+    full_batch: bool = True
     batch_sizes: dict[str, int] = field(
         default_factory=lambda: {"pde": 2048, "ic": 256, "bc": 256},
     )

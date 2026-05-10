@@ -62,7 +62,12 @@ class ComponentSampler:
 
     def draw(self) -> SampleBatch:
         if self.pool is None:
-            return self.sampler(self.sample_size, self.spec, self.device, generator=self.generator)
+            return self.sampler(
+                self.sample_size,
+                self.spec,
+                self.device,
+                generator=self.generator,
+            )
         pool_size = self.pool.xt.shape[0]
         if self.sample_size == pool_size:
             return self.pool
@@ -73,7 +78,16 @@ class ComponentSampler:
             xt=self.pool.xt.index_select(0, indices),
             x=self.pool.x.index_select(0, indices),
             t=self.pool.t.index_select(0, indices),
+            y=None if self.pool.y is None else self.pool.y.index_select(0, indices),
         )
+
+    def describe(self) -> dict[str, int | str | bool | None]:
+        return {
+            "sample_size": int(self.sample_size),
+            "pool_size": None if self.pool is None else int(self.pool.xt.shape[0]),
+            "uses_pool": self.pool is not None,
+            "full_batch": self.pool is not None and self.sample_size == self.pool.xt.shape[0],
+        }
 
 
 @dataclass
@@ -83,7 +97,10 @@ class LossPack:
     by_name: dict[str, torch.Tensor]
 
     def scalar_dict(self) -> dict[str, float]:
-        return {name: float(value.detach().cpu().item()) for name, value in self.by_name.items()}
+        return {
+            name: float(value.detach().cpu().item())
+            for name, value in self.by_name.items()
+        }
 
 
 class LossEvaluator:
@@ -94,26 +111,55 @@ class LossEvaluator:
         pool_sizes: dict[str, int],
         device: torch.device,
         seed: int,
+        full_batch: bool = True,
     ):
         self.spec = spec
         self.device = device
         self.component_names = spec.component_names
         self.samplers: dict[str, ComponentSampler] = {}
-        self._constraint_by_name = {constraint.name: constraint for constraint in spec.constraints}
+        self._constraint_by_name = {
+            constraint.name: constraint
+            for constraint in spec.constraints
+        }
+        self.full_batch = bool(full_batch)
 
         for idx, name in enumerate(self.component_names):
-            if name not in batch_sizes:
+            default_size = spec.default_batch_sizes.get(name)
+            if self.full_batch and default_size is not None:
+                sample_size = int(default_size)
+                pool_size = int(default_size)
+            elif name in batch_sizes:
+                sample_size = int(batch_sizes[name])
+                pool_size = pool_sizes.get(name)
+            elif default_size is not None:
+                sample_size = int(default_size)
+                pool_size = int(default_size)
+            else:
                 raise KeyError(f"batch_sizes must contain {name!r}")
-            sampler = sample_interior if name == "pde" else self._constraint_by_name[name].sampler
+            if name == "pde":
+                sampler = spec.pde_sampler or sample_interior
+            else:
+                sampler = self._constraint_by_name[name].sampler
             self.samplers[name] = ComponentSampler.build(
                 name=name,
                 sampler=sampler,
-                sample_size=int(batch_sizes[name]),
-                pool_size=pool_sizes.get(name),
+                sample_size=sample_size,
+                pool_size=pool_size,
                 spec=spec,
                 device=device,
                 seed=seed + 7919 * (idx + 1),
             )
+        self.batch_info = self._make_batch_info()
+
+    def _make_batch_info(self) -> dict:
+        return {
+            "full_batch_requested": self.full_batch,
+            "data_info": self.spec.data_info,
+            "components": {
+                name: sampler.describe()
+                for name, sampler in self.samplers.items()
+            },
+        }
 
     def draw_batches(self) -> dict[str, SampleBatch]:
         batches = {"pde": self.samplers["pde"].draw()}

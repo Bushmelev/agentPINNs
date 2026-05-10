@@ -21,6 +21,17 @@ python3 -m venv .venv
 .venv/bin/pip install -e .
 ```
 
+Для Burgers-конфига положите HDF5-файл рядом с `train.py` или задайте свой путь в `equation_params.data_path`:
+
+```json
+"equation_params": {
+  "nu": 0.001,
+  "data_path": "1D_Burgers_Sols_Nu0.001.hdf5",
+  "sample_id": 0,
+  "target_time": 0.0
+}
+```
+
 ```bash
 python train.py --config configs/burgers_tiny_loss_weight.json
 ```
@@ -34,8 +45,11 @@ python train.py --equation heat --controllers fixed,tiny_loss_weight,softadapt,r
 Артефакты сохраняются в `artifacts/<timestamp>/<equation>/<controller>/`:
 
 - `history.json`
+- `batch_info.json`
 - `checkpoint.pt`
 - `plots/*.png`
+
+Для HDF5 Burgers training всегда full-batch: размеры `pde`, `ic`, `bc` берутся из размеров координат в файле и сохраняются в `batch_info.json`.
 
 ## Контроллеры весов
 

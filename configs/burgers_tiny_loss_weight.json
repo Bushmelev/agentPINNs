@@ -1,6 +1,11 @@
 {
   "equation": "burgers",
-  "equation_params": {},
+  "equation_params": {
+    "nu": 0.001,
+    "data_path": "1D_Burgers_Sols_Nu0.001.hdf5",
+    "sample_id": 0,
+    "target_time": 0.0
+  },
   "controllers": ["fixed", "tiny_loss_weight", "softadapt", "relobralo", "gradnorm"],
   "seed": 1234,
   "device": "auto",
@@ -13,16 +18,9 @@
   },
   "training": {
     "steps": 8000,
-    "batch_sizes": {
-      "pde": 4096,
-      "ic": 512,
-      "bc": 512
-    },
-    "pool_sizes": {
-      "pde": 65536,
-      "ic": 8192,
-      "bc": 8192
-    },
+    "full_batch": true,
+    "batch_sizes": {},
+    "pool_sizes": {},
     "optimizer_mode": "adam",
     "optimizer": "adam",
     "lr": 0.001,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 import torch
@@ -16,6 +17,7 @@ class SampleBatch:
     xt: torch.Tensor
     x: torch.Tensor
     t: torch.Tensor
+    y: torch.Tensor | None = None
 
 
 TargetFn = Callable[[SampleBatch, "EquationSpec"], torch.Tensor]
@@ -40,7 +42,10 @@ class EquationSpec:
     t_max: float
     residual_fn: ResidualFn
     constraints: Sequence[ConstraintSpec] = field(default_factory=tuple)
-    params: dict[str, float] = field(default_factory=dict)
+    pde_sampler: Sampler | None = None
+    params: dict[str, Any] = field(default_factory=dict)
+    default_batch_sizes: dict[str, int] = field(default_factory=dict)
+    data_info: dict[str, Any] = field(default_factory=dict)
     reference_solver: ReferenceSolver | None = None
 
     @property
