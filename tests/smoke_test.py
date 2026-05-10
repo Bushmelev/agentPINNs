@@ -18,12 +18,16 @@ def main() -> None:
         shutil.rmtree(out_dir)
     cfg = ExperimentConfig(
         equation="heat",
-        controllers=["fixed", "tiny_loss_weight"],
+        controllers=["fixed", "tiny_loss_weight", "softadapt", "relobralo", "gradnorm"],
         output_dir=str(out_dir),
         save_plots=False,
         model=ModelConfig(layers=[2, 8, 8, 1], activation="tanh"),
         training=TrainingConfig(
             steps=3,
+            optimizer_mode="adam_lbfgs",
+            adam_steps=2,
+            lbfgs_steps=1,
+            lbfgs_max_iter=1,
             batch_sizes={"pde": 16, "ic": 8, "bc": 8},
             pool_sizes={},
             log_every=1,
@@ -33,6 +37,9 @@ def main() -> None:
     run_dir = run_experiment(cfg)
     assert (run_dir / "heat" / "fixed" / "history.json").exists()
     assert (run_dir / "heat" / "tiny_loss_weight" / "history.json").exists()
+    assert (run_dir / "heat" / "softadapt" / "history.json").exists()
+    assert (run_dir / "heat" / "relobralo" / "history.json").exists()
+    assert (run_dir / "heat" / "gradnorm" / "history.json").exists()
 
 
 if __name__ == "__main__":

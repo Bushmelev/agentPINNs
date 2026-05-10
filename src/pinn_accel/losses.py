@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
 import torch
@@ -115,13 +115,25 @@ class LossEvaluator:
                 seed=seed + 7919 * (idx + 1),
             )
 
-    def compute(self, model: nn.Module) -> LossPack:
+    def draw_batches(self) -> dict[str, SampleBatch]:
+        batches = {"pde": self.samplers["pde"].draw()}
+        for constraint in self.spec.constraints:
+            batches[constraint.name] = self.samplers[constraint.name].draw()
+        return batches
+
+    def compute(
+        self,
+        model: nn.Module,
+        batches: Mapping[str, SampleBatch] | None = None,
+    ) -> LossPack:
+        if batches is None:
+            batches = self.draw_batches()
         by_name: dict[str, torch.Tensor] = {}
-        pde_batch = self.samplers["pde"].draw()
+        pde_batch = batches["pde"]
         by_name["pde"] = residual_mse(self.spec.residual(model, pde_batch.xt))
 
         for constraint in self.spec.constraints:
-            batch = self.samplers[constraint.name].draw()
+            batch = batches[constraint.name]
             prediction = model(batch.xt)
             target = constraint.target_fn(batch, self.spec)
             by_name[constraint.name] = mse(prediction, target)

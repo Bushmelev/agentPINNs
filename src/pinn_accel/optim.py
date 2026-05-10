@@ -23,6 +23,29 @@ def make_optimizer(
     raise ValueError(f"Unknown optimizer: {name}")
 
 
+def make_lbfgs_optimizer(
+    params: Iterable[torch.nn.Parameter],
+    *,
+    lr: float = 1.0,
+    max_iter: int = 20,
+    max_eval: int | None = None,
+    history_size: int = 100,
+    tolerance_grad: float = 1e-7,
+    tolerance_change: float = 1e-9,
+    line_search_fn: str | None = "strong_wolfe",
+) -> torch.optim.LBFGS:
+    return torch.optim.LBFGS(
+        params,
+        lr=lr,
+        max_iter=max_iter,
+        max_eval=max_eval,
+        history_size=history_size,
+        tolerance_grad=tolerance_grad,
+        tolerance_change=tolerance_change,
+        line_search_fn=line_search_fn,
+    )
+
+
 def make_scheduler(
     optimizer: torch.optim.Optimizer,
     name: str,

@@ -15,6 +15,48 @@ import torch.nn as nn
 from .equations.base import EquationSpec
 
 
+METHOD_COLORS = {
+    "fixed": "#4d4d4d",
+    "agent": "#1f77b4",
+    "tiny_loss_weight": "#1f77b4",
+    "tinylossweight": "#1f77b4",
+    "softadapt": "#ff7f0e",
+    "relobralo": "#2ca02c",
+    "gradnorm": "#d62728",
+}
+
+METHOD_LABELS = {
+    "fixed": "fixed",
+    "agent": "agent",
+    "tiny_loss_weight": "agent",
+    "tinylossweight": "agent",
+    "softadapt": "SoftAdapt",
+    "relobralo": "ReLoBRaLo",
+    "gradnorm": "GradNorm",
+}
+
+
+def _method_key(label: str) -> str:
+    normalized = label.lower().replace("-", "_").replace(" ", "_")
+    compact = normalized.replace("_", "")
+    if "tinylossweight" in compact or "agent" in normalized:
+        return "agent"
+    for key in ("fixed", "softadapt", "relobralo", "gradnorm"):
+        if key in compact:
+            return key
+    return normalized
+
+
+def _method_color(label: str) -> str | None:
+    key = _method_key(label)
+    return METHOD_COLORS.get(key) or METHOD_COLORS.get(label.lower())
+
+
+def _method_label(label: str) -> str:
+    key = _method_key(label)
+    return METHOD_LABELS.get(key, key)
+
+
 def _save(fig: plt.Figure, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, dpi=180, bbox_inches="tight")
@@ -23,10 +65,16 @@ def _save(fig: plt.Figure, path: Path) -> None:
 
 def save_history_plots(history: Mapping, plot_dir: Path) -> None:
     steps = np.arange(1, len(history["equal_weight_total"]) + 1)
+    method_color = _method_color(str(history.get("controller", "")))
 
     fig = plt.figure(figsize=(7, 4))
-    plt.semilogy(steps, history["equal_weight_total"], label="equal")
-    plt.semilogy(steps, history["weighted_total"], label="weighted")
+    plt.semilogy(steps, history["equal_weight_total"], label="equal", color="#7f7f7f")
+    plt.semilogy(
+        steps,
+        history["weighted_total"],
+        label="weighted",
+        color=method_color,
+    )
     plt.xlabel("step")
     plt.ylabel("loss")
     plt.grid(True, which="both", ls="--", alpha=0.3)
@@ -60,7 +108,13 @@ def save_history_plots(history: Mapping, plot_dir: Path) -> None:
         )
         mask = np.isfinite(reward_values)
         fig = plt.figure(figsize=(7, 4))
-        plt.plot(steps[mask], reward_values[mask], marker="o", markersize=3)
+        plt.plot(
+            steps[mask],
+            reward_values[mask],
+            marker="o",
+            markersize=3,
+            color=method_color,
+        )
         plt.axhline(0.0, color="black", linewidth=1, alpha=0.35)
         plt.xlabel("step")
         plt.ylabel("reward")
@@ -73,25 +127,71 @@ def save_comparison_plots(histories: Mapping[str, Mapping], plot_dir: Path) -> N
         return
     fig = plt.figure(figsize=(7, 4))
     for label, history in histories.items():
-        plt.semilogy(history["equal_weight_total"], label=label)
+        plt.semilogy(
+            history["equal_weight_total"],
+            label=_method_label(label),
+            color=_method_color(label),
+        )
     plt.xlabel("step")
     plt.ylabel("equal-weight loss")
     plt.grid(True, which="both", ls="--", alpha=0.3)
     plt.legend()
     _save(fig, plot_dir / "comparison_equal_loss.png")
 
+    fig = plt.figure(figsize=(7, 4))
+    for label, history in histories.items():
+        plt.semilogy(
+            history["weighted_total"],
+            label=_method_label(label),
+            color=_method_color(label),
+        )
+    plt.xlabel("step")
+    plt.ylabel("weighted loss")
+    plt.grid(True, which="both", ls="--", alpha=0.3)
+    plt.legend()
+    _save(fig, plot_dir / "comparison_weighted_loss.png")
+
     component_names = list(next(iter(histories.values()))["component_names"])
-    fig, axes = plt.subplots(1, len(component_names), figsize=(4 * len(component_names), 3.5))
+    fig, axes = plt.subplots(
+        1,
+        len(component_names),
+        figsize=(4 * len(component_names), 3.5),
+    )
     axes = np.atleast_1d(axes)
     for axis, component in zip(axes, component_names):
         for label, history in histories.items():
-            axis.semilogy(history["components"][component], label=label)
+            axis.semilogy(
+                history["components"][component],
+                label=_method_label(label),
+                color=_method_color(label),
+            )
         axis.set_title(component)
         axis.set_xlabel("step")
         axis.grid(True, which="both", ls="--", alpha=0.3)
     axes[0].set_ylabel("loss")
     axes[0].legend()
     _save(fig, plot_dir / "comparison_components.png")
+
+    fig, axes = plt.subplots(
+        1,
+        len(component_names),
+        figsize=(4 * len(component_names), 3.5),
+    )
+    axes = np.atleast_1d(axes)
+    for idx, (axis, component) in enumerate(zip(axes, component_names)):
+        for label, history in histories.items():
+            weights = np.asarray(history["weights"], dtype=np.float64)
+            axis.plot(
+                weights[:, idx],
+                label=_method_label(label),
+                color=_method_color(label),
+            )
+        axis.set_title(f"w_{component}")
+        axis.set_xlabel("step")
+        axis.grid(True, ls="--", alpha=0.3)
+    axes[0].set_ylabel("weight")
+    axes[0].legend()
+    _save(fig, plot_dir / "comparison_weights.png")
 
 
 def evaluate_grid(

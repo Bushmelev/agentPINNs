@@ -19,6 +19,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--equation", help="Equation name from the registry.")
     parser.add_argument("--controllers", help="Comma-separated controllers.")
     parser.add_argument("--steps", type=int, help="Training steps.")
+    parser.add_argument(
+        "--optimizer-mode",
+        choices=["adam", "adam_lbfgs", "lbfgs"],
+        help="PINN optimizer schedule.",
+    )
+    parser.add_argument("--adam-steps", type=int, help="Adam phase steps.")
+    parser.add_argument("--lbfgs-steps", type=int, help="L-BFGS phase steps.")
     parser.add_argument("--device", help="auto, cpu, cuda, cuda:0, mps.")
     parser.add_argument("--seed", type=int, help="Random seed.")
     parser.add_argument("--out", dest="output_dir", help="Artifacts directory.")
@@ -40,6 +47,9 @@ def main() -> None:
         seed=args.seed,
         output_dir=args.output_dir,
         reward=args.reward,
+        optimizer_mode=args.optimizer_mode,
+        adam_steps=args.adam_steps,
+        lbfgs_steps=args.lbfgs_steps,
         compile_model=args.compile_model,
         save_plots=args.save_plots,
     )

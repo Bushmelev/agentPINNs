@@ -28,7 +28,7 @@ python train.py --config configs/burgers_tiny_loss_weight.json
 Быстрый smoke-run:
 
 ```bash
-python train.py --equation heat --controllers fixed --steps 20 --no-plots
+python train.py --equation heat --controllers fixed,tiny_loss_weight,softadapt,relobralo,gradnorm --steps 20 --no-plots
 ```
 
 Артефакты сохраняются в `artifacts/<timestamp>/<equation>/<controller>/`:
@@ -36,6 +36,28 @@ python train.py --equation heat --controllers fixed --steps 20 --no-plots
 - `history.json`
 - `checkpoint.pt`
 - `plots/*.png`
+
+## Контроллеры весов
+
+Встроенные контроллеры:
+
+- `fixed`
+- `tiny_loss_weight`
+- `softadapt`
+- `relobralo`
+- `gradnorm`
+
+Если перечислить несколько контроллеров в `controllers`, для каждого сохраняются свои history/checkpoint/plots, а общие графики сравнения лежат в `comparison/plots`.
+
+## Режимы оптимизации PINN
+
+`training.optimizer_mode` поддерживает:
+
+- `adam`
+- `adam_lbfgs`
+- `lbfgs`
+
+Для `adam_lbfgs` можно явно задать `adam_steps` и `lbfgs_steps`. Если их не задать, `steps` делится примерно 80/20 между Adam и L-BFGS.
 
 ## Добавить новое уравнение
 

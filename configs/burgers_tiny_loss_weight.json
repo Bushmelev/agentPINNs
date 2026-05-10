@@ -1,7 +1,7 @@
 {
   "equation": "burgers",
   "equation_params": {},
-  "controllers": ["fixed", "tiny_loss_weight"],
+  "controllers": ["fixed", "tiny_loss_weight", "softadapt", "relobralo", "gradnorm"],
   "seed": 1234,
   "device": "auto",
   "output_dir": "artifacts",
@@ -12,7 +12,7 @@
     "activation": "tanh"
   },
   "training": {
-    "steps": 2000,
+    "steps": 8000,
     "batch_sizes": {
       "pde": 4096,
       "ic": 512,
@@ -23,13 +23,23 @@
       "ic": 8192,
       "bc": 8192
     },
+    "optimizer_mode": "adam",
     "optimizer": "adam",
     "lr": 0.001,
     "weight_decay": 0.0,
     "scheduler": "constant",
+    "adam_steps": null,
+    "lbfgs_steps": null,
+    "lbfgs_lr": 1.0,
+    "lbfgs_max_iter": 20,
+    "lbfgs_max_eval": null,
+    "lbfgs_history_size": 100,
+    "lbfgs_tolerance_grad": 1e-7,
+    "lbfgs_tolerance_change": 1e-9,
+    "lbfgs_line_search_fn": "strong_wolfe",
     "log_every": 100,
     "agent_update_interval": 25,
-    "agent_warmup_steps": 250,
+    "agent_warmup_steps": 0,
     "compile_model": false
   },
   "controller_params": {
@@ -41,6 +51,17 @@
       "max_weight_share": 0.6,
       "include_initial_loss_ratios": true,
       "zero_init_policy": true
+    },
+    "softadapt": {
+      "temperature": 1.0
+    },
+    "relobralo": {
+      "alpha": 0.999,
+      "beta": 0.99,
+      "tau": 1.0
+    },
+    "gradnorm": {
+      "alpha": 1.0
     }
   }
 }

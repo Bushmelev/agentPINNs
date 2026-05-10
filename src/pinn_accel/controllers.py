@@ -71,6 +71,7 @@ class WeightController(nn.Module):
         losses: torch.Tensor,
         model: nn.Module,
         step: int,
+        update_state: bool = True,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         raise NotImplementedError
 
@@ -91,8 +92,9 @@ class FixedController(WeightController):
         losses: torch.Tensor,
         model: nn.Module,
         step: int,
+        update_state: bool = True,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        del model, step
+        del model, step, update_state
         weights = self.base_weights.to(losses.device)
         self.effective_weights.copy_(weights.detach())
         return torch.sum(weights * losses), weights.detach()
@@ -118,8 +120,12 @@ class SoftAdaptController(WeightController):
         losses: torch.Tensor,
         model: nn.Module,
         step: int,
+        update_state: bool = True,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         del model
+        if not update_state:
+            weights = self.effective_weights.to(losses.device)
+            return torch.sum(weights.detach() * losses), weights.detach()
         if step == 1:
             self.previous_losses.copy_(losses.detach())
             weights = self.base_weights.to(losses.device)
@@ -161,8 +167,12 @@ class ReLoBRaLoController(WeightController):
         losses: torch.Tensor,
         model: nn.Module,
         step: int,
+        update_state: bool = True,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         del model
+        if not update_state:
+            weights = self.effective_weights.to(losses.device)
+            return torch.sum(weights.detach() * losses), weights.detach()
         if step == 1:
             clamped = torch.clamp(losses.detach(), min=1e-8)
             self.initial_losses.copy_(clamped)
@@ -208,15 +218,20 @@ class GradNormController(WeightController):
         losses: torch.Tensor,
         model: nn.Module,
         step: int,
+        update_state: bool = True,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         if self.log_lambda is None:
             raise RuntimeError("GradNormController is not bound")
-        if step == 1:
+        if step == 1 and update_state:
             self.initial_losses.copy_(torch.clamp(losses.detach(), min=1e-8))
 
-        with torch.no_grad():
-            normalizer = len(losses) / torch.clamp(torch.exp(self.log_lambda).sum(), min=1e-8)
-            self.log_lambda.add_(torch.log(normalizer))
+        if update_state:
+            with torch.no_grad():
+                normalizer = len(losses) / torch.clamp(
+                    torch.exp(self.log_lambda).sum(),
+                    min=1e-8,
+                )
+                self.log_lambda.add_(torch.log(normalizer))
 
         lam = torch.exp(self.log_lambda)
         relative = losses.detach() / torch.clamp(self.initial_losses, min=1e-8)
@@ -277,8 +292,9 @@ class AgentWeightController(WeightController):
         losses: torch.Tensor,
         model: nn.Module,
         step: int,
+        update_state: bool = True,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        del model, step
+        del model, step, update_state
         if self._weights_np is None:
             raise RuntimeError("AgentWeightController is not bound")
         weights = torch.tensor(self._weights_np, dtype=losses.dtype, device=losses.device)
