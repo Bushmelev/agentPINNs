@@ -57,6 +57,11 @@ def _save_result(
         )
 
 
+def _last_finite(values: list[Any]) -> float | None:
+    finite = [float(value) for value in values if value is not None]
+    return finite[-1] if finite else None
+
+
 def run_experiment(cfg: ExperimentConfig) -> Path:
     configure_torch()
     device = resolve_device(cfg.device)
@@ -122,6 +127,7 @@ def run_experiment(cfg: ExperimentConfig) -> Path:
             "elapsed_sec": result.elapsed_sec,
             "final_equal_weight_total": result.history["equal_weight_total"][-1],
             "final_weighted_total": result.history["weighted_total"][-1],
+            "final_relative_l2": _last_finite(result.history.get("relative_l2", [])),
             "final_weights": result.history["weights"][-1],
         }
         for label, result in results.items()

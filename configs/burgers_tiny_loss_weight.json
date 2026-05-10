@@ -2,7 +2,7 @@
   "equation": "burgers",
   "equation_params": {
     "nu": 0.001,
-    "data_path": "1D_Burgers_Sols_Nu0.001.hdf5",
+    "data_path": "../hdf5-files/1D_Burgers.hdf5",
     "sample_id": 0,
     "target_time": 0.0
   },
@@ -36,6 +36,8 @@
     "lbfgs_tolerance_change": 1e-9,
     "lbfgs_line_search_fn": "strong_wolfe",
     "log_every": 100,
+    "relative_l2_every": 1,
+    "relative_l2_chunk_size": 65536,
     "agent_update_interval": 25,
     "agent_warmup_steps": 0,
     "compile_model": false

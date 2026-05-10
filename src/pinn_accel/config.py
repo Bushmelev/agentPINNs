@@ -39,6 +39,8 @@ class TrainingConfig:
     lbfgs_tolerance_change: float = 1e-9
     lbfgs_line_search_fn: str | None = "strong_wolfe"
     log_every: int = 100
+    relative_l2_every: int = 1
+    relative_l2_chunk_size: int = 65536
     agent_update_interval: int = 25
     agent_warmup_steps: int = 0
     compile_model: bool = False

@@ -33,12 +33,31 @@ class OptimizerPhase:
     scheduler: torch.optim.lr_scheduler.LRScheduler | None = None
 
 
+@dataclass
+class RelativeL2Metric:
+    xt: torch.Tensor
+    target: torch.Tensor
+    denominator: torch.Tensor
+    chunk_size: int
+
+    def __call__(self, model: nn.Module) -> float:
+        squared_error = torch.zeros((), dtype=torch.float32, device=self.xt.device)
+        with torch.no_grad():
+            for start in range(0, self.xt.shape[0], self.chunk_size):
+                stop = min(start + self.chunk_size, self.xt.shape[0])
+                prediction = model(self.xt[start:stop]).reshape(-1)
+                diff = prediction - self.target[start:stop]
+                squared_error = squared_error + torch.sum(diff * diff)
+        return float(torch.sqrt(squared_error / self.denominator).detach().cpu().item())
+
+
 def _empty_history(component_names: list[str], controller_name: str) -> dict[str, Any]:
     return {
         "controller": controller_name,
         "component_names": component_names,
         "equal_weight_total": [],
         "weighted_total": [],
+        "relative_l2": [],
         "components": {name: [] for name in component_names},
         "weights": [],
         "lr": [],
@@ -139,6 +158,34 @@ def _make_optimizer_phases(
     return phases
 
 
+def _build_relative_l2_metric(
+    spec: EquationSpec,
+    device: torch.device,
+    chunk_size: int,
+) -> RelativeL2Metric | None:
+    if spec.reference_solver is None:
+        return None
+    x, t, u = spec.solve_reference()
+    expected_shape = (len(x), len(t))
+    if u.shape == (len(t), len(x)):
+        u = u.T
+    if u.shape != expected_shape:
+        raise ValueError(
+            f"Reference solution shape must be {expected_shape}, got {u.shape}"
+        )
+    grid_x, grid_t = np.meshgrid(x, t, indexing="ij")
+    xt = np.stack([grid_x.reshape(-1), grid_t.reshape(-1)], axis=1)
+    target_np = u.reshape(-1).astype(np.float32)
+    target = torch.tensor(target_np, dtype=torch.float32, device=device)
+    denominator = torch.clamp(torch.sum(target * target), min=1e-12)
+    return RelativeL2Metric(
+        xt=torch.tensor(xt, dtype=torch.float32, device=device),
+        target=target,
+        denominator=denominator,
+        chunk_size=max(1, int(chunk_size)),
+    )
+
+
 def _history_values(
     loss_pack: LossPack,
     component_names: list[str],
@@ -186,6 +233,15 @@ def train_one(
         optimizer_params.extend(list(controller.parameters()))
     phases = _make_optimizer_phases(optimizer_params, train_cfg)
     total_steps = sum(phase.steps for phase in phases)
+    relative_l2_metric = (
+        _build_relative_l2_metric(
+            spec,
+            device,
+            train_cfg.relative_l2_chunk_size,
+        )
+        if train_cfg.relative_l2_every > 0
+        else None
+    )
     history = _empty_history(component_names, controller.name)
     history["batch_info"] = loss_evaluator.batch_info
     start_time = time.time()
@@ -251,9 +307,15 @@ def train_one(
                 done=step == total_steps,
             )
             extras = controller.after_step(snapshot, baseline_history)
+            relative_l2 = None
+            if relative_l2_metric is not None and (
+                step % train_cfg.relative_l2_every == 0 or step == total_steps
+            ):
+                relative_l2 = relative_l2_metric(train_model)
 
             history["equal_weight_total"].append(equal_total)
             history["weighted_total"].append(weighted_total)
+            history["relative_l2"].append(relative_l2)
             for name, value in zip(component_names, raw_losses):
                 history["components"][name].append(float(value))
             history["weights"].append(weights_np.tolist())
@@ -269,7 +331,9 @@ def train_one(
                 print(
                     f"[{spec.name}/{controller.name}] phase={phase.name} "
                     f"step={step}/{total_steps} equal={equal_total:.3e} "
-                    f"weighted={weighted_total:.3e} {pieces}"
+                    f"weighted={weighted_total:.3e} "
+                    f"rel_l2={relative_l2 if relative_l2 is not None else float('nan'):.3e} "
+                    f"{pieces}"
                 )
 
     return TrainResult(

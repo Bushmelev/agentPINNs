@@ -93,6 +93,7 @@ def build_burgers_hdf5(
     )
     pde_x = x[1:-1]
     pde_t = t[1:]
+    bc_t = t[1:]
     if pde_x.size == 0 or pde_t.size == 0:
         raise ValueError("HDF5 Burgers grid must contain at least 3 x-points and 2 t-points")
 
@@ -133,17 +134,17 @@ def build_burgers_hdf5(
         generator: torch.Generator | None = None,
     ) -> SampleBatch:
         del n, spec, generator
-        t_t = _column_tensor(np.concatenate([t, t]), device)
+        t_t = _column_tensor(np.concatenate([bc_t, bc_t]), device)
         x_t = _column_tensor(
             np.concatenate(
                 [
-                    np.full_like(t, x[0], dtype=np.float64),
-                    np.full_like(t, x[-1], dtype=np.float64),
+                    np.full_like(bc_t, x[0], dtype=np.float64),
+                    np.full_like(bc_t, x[-1], dtype=np.float64),
                 ]
             ),
             device,
         )
-        y_t = _column_tensor(np.concatenate([z[:, 0], z[:, -1]]), device)
+        y_t = _column_tensor(np.concatenate([z[1:, 0], z[1:, -1]]), device)
         return SampleBatch(xt=torch.cat([x_t, t_t], dim=1), x=x_t, t=t_t, y=y_t)
 
     def data_target(batch: SampleBatch, spec: EquationSpec) -> torch.Tensor:
@@ -181,7 +182,7 @@ def build_burgers_hdf5(
         default_batch_sizes={
             "pde": int(pde_x.size * pde_t.size),
             "ic": int(x.size),
-            "bc": int(2 * t.size),
+            "bc": int(2 * bc_t.size),
         },
         data_info={
             "source": "hdf5",
@@ -192,7 +193,7 @@ def build_burgers_hdf5(
             "t_points": int(t.size),
             "pde_points": int(pde_x.size * pde_t.size),
             "ic_points": int(x.size),
-            "bc_points": int(2 * t.size),
+            "bc_points": int(2 * bc_t.size),
             "ic_time_index": int(ic_index),
             "ic_time": float(t[ic_index]),
             "nu": float(nu),

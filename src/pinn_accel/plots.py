@@ -81,6 +81,24 @@ def save_history_plots(history: Mapping, plot_dir: Path) -> None:
     plt.legend()
     _save(fig, plot_dir / "loss_total.png")
 
+    relative_l2 = history.get("relative_l2")
+    if relative_l2 is not None and any(value is not None for value in relative_l2):
+        values = np.array(
+            [np.nan if value is None else float(value) for value in relative_l2],
+            dtype=np.float64,
+        )
+        mask = np.isfinite(values)
+        fig = plt.figure(figsize=(7, 4))
+        plt.semilogy(
+            steps[mask],
+            values[mask],
+            color=method_color,
+        )
+        plt.xlabel("step")
+        plt.ylabel("relative L2 error")
+        plt.grid(True, which="both", ls="--", alpha=0.3)
+        _save(fig, plot_dir / "relative_l2.png")
+
     fig = plt.figure(figsize=(7, 4))
     for name in history["component_names"]:
         plt.semilogy(steps, history["components"][name], label=name)
@@ -150,6 +168,31 @@ def save_comparison_plots(histories: Mapping[str, Mapping], plot_dir: Path) -> N
     plt.grid(True, which="both", ls="--", alpha=0.3)
     plt.legend()
     _save(fig, plot_dir / "comparison_weighted_loss.png")
+
+    if any(history.get("relative_l2") for history in histories.values()):
+        fig = plt.figure(figsize=(7, 4))
+        for label, history in histories.items():
+            values = np.array(
+                [
+                    np.nan if value is None else float(value)
+                    for value in history.get("relative_l2", [])
+                ],
+                dtype=np.float64,
+            )
+            mask = np.isfinite(values)
+            if not np.any(mask):
+                continue
+            plt.semilogy(
+                np.arange(1, len(values) + 1)[mask],
+                values[mask],
+                label=_method_label(label),
+                color=_method_color(label),
+            )
+        plt.xlabel("step")
+        plt.ylabel("relative L2 error")
+        plt.grid(True, which="both", ls="--", alpha=0.3)
+        plt.legend()
+        _save(fig, plot_dir / "comparison_relative_l2.png")
 
     component_names = list(next(iter(histories.values()))["component_names"])
     fig, axes = plt.subplots(
