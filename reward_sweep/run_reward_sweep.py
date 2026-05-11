@@ -41,6 +41,11 @@ ALL_REWARDS = [
     "relative_l2_improvement",
     "relative_l2_baseline_gap",
     "relative_l2_baseline_gap_delta",
+    "log_normalized_baseline_gap",
+    "component_baseline_gap",
+    "worst_component_baseline_gap",
+    "loss_l2_hybrid",
+    "progressive_loss_l2_hybrid",
 ]
 
 
@@ -58,6 +63,11 @@ REWARD_COLORS = {
             "#e377c2",
             "#7f7f7f",
             "#17becf",
+            "#bcbd22",
+            "#aec7e8",
+            "#ffbb78",
+            "#98df8a",
+            "#ff9896",
         ],
     )
 }

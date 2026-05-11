@@ -16,7 +16,12 @@
     "normalized_baseline_gap_delta",
     "relative_l2_improvement",
     "relative_l2_baseline_gap",
-    "relative_l2_baseline_gap_delta"
+    "relative_l2_baseline_gap_delta",
+    "log_normalized_baseline_gap",
+    "component_baseline_gap",
+    "worst_component_baseline_gap",
+    "loss_l2_hybrid",
+    "progressive_loss_l2_hybrid"
   ],
   "seed": 1234,
   "device": "auto",
