@@ -45,7 +45,7 @@
   },
   "controller_params": {
     "tiny_loss_weight": {
-      "reward": "baseline_gap",
+      "reward": "normalized_baseline_gap",
       "sigma": 0.1,
       "action_scale": 0.1,
       "min_weight_share": 0.1,
