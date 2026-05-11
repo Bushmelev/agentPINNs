@@ -17,6 +17,7 @@ class BaseWeightAgent(nn.Module):
         min_weight: float = 1e-6,
         min_weight_share: float | None = None,
         max_weight_share: float | None = None,
+        include_log_losses: bool = False,
         include_initial_loss_ratios: bool = True,
         feature_clip: float = 10.0,
         trainable: bool = True,
@@ -29,6 +30,7 @@ class BaseWeightAgent(nn.Module):
         self.min_weight = float(min_weight)
         self.min_weight_share = min_weight_share
         self.max_weight_share = max_weight_share
+        self.include_log_losses = bool(include_log_losses)
         self.include_initial_loss_ratios = bool(include_initial_loss_ratios)
         self.feature_clip = float(feature_clip)
         self.trainable = trainable
@@ -67,8 +69,9 @@ class BaseWeightAgent(nn.Module):
 
     def state_dim(self) -> int:
         n_losses = len(self.component_names)
+        loss_features = n_losses if self.include_log_losses else 0
         ratio_features = n_losses if self.include_initial_loss_ratios else 0
-        return 3 * n_losses + ratio_features + 1
+        return loss_features + 2 * n_losses + ratio_features + 1
 
     def configure_optimizer(self, **kwargs: Any) -> None:
         if "optimizer" in kwargs:
@@ -112,7 +115,10 @@ class BaseWeightAgent(nn.Module):
             (np.clip(normalized_weights, eps, None) + eps) / (mean_weight + eps)
         ).astype(np.float32)
 
-        pieces = [log_losses, dlog_losses, log_lambdas]
+        pieces = []
+        if self.include_log_losses:
+            pieces.append(log_losses)
+        pieces.extend([dlog_losses, log_lambdas])
         if self.include_initial_loss_ratios:
             initial = np.clip(self.initial_losses, eps, None)
             pieces.append(np.log((losses_np + eps) / (initial + eps)).astype(np.float32))
@@ -124,12 +130,15 @@ class BaseWeightAgent(nn.Module):
 
     def split_state(self, state: np.ndarray) -> tuple[np.ndarray, ...]:
         n_losses = len(self.component_names)
-        parts: list[np.ndarray] = [
-            state[0:n_losses],
-            state[n_losses : 2 * n_losses],
-            state[2 * n_losses : 3 * n_losses],
-        ]
-        cursor = 3 * n_losses
+        cursor = 0
+        parts: list[np.ndarray] = []
+        if self.include_log_losses:
+            parts.append(state[cursor : cursor + n_losses])
+            cursor += n_losses
+        parts.append(state[cursor : cursor + n_losses])
+        cursor += n_losses
+        parts.append(state[cursor : cursor + n_losses])
+        cursor += n_losses
         if self.include_initial_loss_ratios:
             parts.append(state[cursor : cursor + n_losses])
             cursor += n_losses

@@ -154,7 +154,10 @@ class TinyLossWeightAgent(BaseWeightAgent):
             dtype=log_losses.dtype,
             device=log_losses.device,
         ).reshape(1)
-        pieces = [log_losses, dlog_losses, log_lambdas]
+        pieces = []
+        if self.include_log_losses:
+            pieces.append(log_losses)
+        pieces.extend([dlog_losses, log_lambdas])
         if self.include_initial_loss_ratios:
             if log_initial_loss_ratios is None:
                 log_initial_loss_ratios = torch.zeros_like(log_losses)

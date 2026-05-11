@@ -69,6 +69,7 @@
       "action_scale": 0.1,
       "min_weight_share": 0.1,
       "max_weight_share": 0.7,
+      "include_log_losses": false,
       "include_initial_loss_ratios": true,
       "policy_bias": false,
       "policy_hidden_dim": null,
