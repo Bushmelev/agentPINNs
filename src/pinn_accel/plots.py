@@ -63,6 +63,35 @@ def _save(fig: plt.Figure, path: Path) -> None:
     plt.close(fig)
 
 
+def _reference_grid(spec: EquationSpec) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
+    if spec.reference_solver is None:
+        return None
+    x, t, u = spec.solve_reference()
+    if u.shape == (len(t), len(x)):
+        u = u.T
+    if u.shape != (len(x), len(t)):
+        raise ValueError(f"Reference solution shape must be {(len(x), len(t))}, got {u.shape}")
+    return x, t, u
+
+
+def _predict_slice(
+    model: nn.Module,
+    x: np.ndarray,
+    t_value: float,
+    device: torch.device,
+    chunk_size: int = 65536,
+) -> np.ndarray:
+    xt_np = np.stack([x, np.full_like(x, t_value)], axis=1)
+    xt = torch.tensor(xt_np, dtype=torch.float32, device=device)
+    values: list[np.ndarray] = []
+    model.eval()
+    with torch.no_grad():
+        for start in range(0, xt.shape[0], chunk_size):
+            stop = min(start + chunk_size, xt.shape[0])
+            values.append(model(xt[start:stop]).reshape(-1).detach().cpu().numpy())
+    return np.concatenate(values)
+
+
 def save_history_plots(history: Mapping, plot_dir: Path) -> None:
     steps = np.arange(1, len(history["equal_weight_total"]) + 1)
     method_color = _method_color(str(history.get("controller", "")))
@@ -235,6 +264,68 @@ def save_comparison_plots(histories: Mapping[str, Mapping], plot_dir: Path) -> N
     axes[0].set_ylabel("weight")
     axes[0].legend()
     _save(fig, plot_dir / "comparison_weights.png")
+
+
+def save_solution_slice_comparison(
+    models: Mapping[str, nn.Module],
+    spec: EquationSpec,
+    device: torch.device,
+    plot_dir: Path,
+    times: list[float],
+    chunk_size: int = 65536,
+) -> None:
+    if not models or not times:
+        return
+    reference = _reference_grid(spec)
+    if reference is None:
+        x = np.linspace(spec.x_min, spec.x_max, 512, dtype=np.float64)
+        t_ref = None
+        u_ref = None
+    else:
+        x, t_ref, u_ref = reference
+
+    valid_times = [
+        float(value)
+        for value in times
+        if spec.t_min - 1e-12 <= float(value) <= spec.t_max + 1e-12
+    ]
+    if not valid_times:
+        return
+
+    ncols = min(2, len(valid_times))
+    nrows = int(np.ceil(len(valid_times) / ncols))
+    fig, axes = plt.subplots(nrows, ncols, figsize=(6 * ncols, 3.8 * nrows), squeeze=False)
+    axes_flat = axes.reshape(-1)
+    for axis, requested_time in zip(axes_flat, valid_times):
+        plot_time = requested_time
+        if t_ref is not None and u_ref is not None:
+            time_index = int(np.argmin(np.abs(t_ref - requested_time)))
+            plot_time = float(t_ref[time_index])
+            axis.plot(
+                x,
+                u_ref[:, time_index],
+                label="reference",
+                color="black",
+                linewidth=2.0,
+                linestyle="--",
+            )
+        for label, model in models.items():
+            prediction = _predict_slice(model, x, plot_time, device, chunk_size)
+            axis.plot(
+                x,
+                prediction,
+                label=_method_label(label),
+                color=_method_color(label),
+                alpha=0.95,
+            )
+        axis.set_title(f"t={plot_time:.3g}")
+        axis.set_xlabel("x")
+        axis.set_ylabel("u")
+        axis.grid(True, ls="--", alpha=0.3)
+    for axis in axes_flat[len(valid_times) :]:
+        axis.axis("off")
+    axes_flat[0].legend()
+    _save(fig, plot_dir / "comparison_solution_slices.png")
 
 
 def evaluate_grid(

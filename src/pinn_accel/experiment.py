@@ -8,7 +8,12 @@ from .config import ExperimentConfig
 from .controllers import controller_needs_baseline, make_controller
 from .equations import get_equation
 from .equations.base import EquationSpec
-from .plots import save_comparison_plots, save_history_plots, save_solution_plot
+from .plots import (
+    save_comparison_plots,
+    save_history_plots,
+    save_solution_plot,
+    save_solution_slice_comparison,
+)
 from .settings import configure_torch, resolve_device
 from .training import TrainResult, train_one
 
@@ -121,6 +126,13 @@ def run_experiment(cfg: ExperimentConfig) -> Path:
     if cfg.save_plots:
         compare_dir = store.equation_dir(spec.name) / "comparison" / "plots"
         save_comparison_plots(histories_for_compare, compare_dir)
+        save_solution_slice_comparison(
+            {label: result.model for label, result in results.items()},
+            spec,
+            device,
+            compare_dir,
+            times=cfg.solution_slice_times,
+        )
 
     summary = {
         label: {

@@ -51,6 +51,7 @@ python train.py --equation heat --controllers fixed,tiny_loss_weight,softadapt,r
 
 Для HDF5 Burgers training всегда full-batch: размеры `pde`, `ic`, `bc` берутся из размеров координат в файле и сохраняются в `batch_info.json`.
 Если доступно истинное решение, в `history.json` также пишется `relative_l2`, а графики сохраняются как `relative_l2.png` и `comparison_relative_l2.png`.
+Сравнение решений по срезам времени из `solution_slice_times` сохраняется в `comparison_solution_slices.png`.
 
 ## Контроллеры весов
 

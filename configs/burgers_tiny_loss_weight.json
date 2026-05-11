@@ -12,6 +12,7 @@
   "output_dir": "artifacts",
   "save_plots": true,
   "plot_grid": 120,
+  "solution_slice_times": [0.5, 1.0, 1.5, 2.0],
   "model": {
     "layers": [2, 40, 40, 40, 40, 1],
     "activation": "tanh"
@@ -48,7 +49,7 @@
       "sigma": 0.1,
       "action_scale": 0.1,
       "min_weight_share": 0.1,
-      "max_weight_share": 0.6,
+      "max_weight_share": 0.7,
       "include_initial_loss_ratios": true,
       "policy_bias": false,
       "policy_hidden_dim": null,

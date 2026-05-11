@@ -64,6 +64,9 @@ class ExperimentConfig:
     output_dir: str = "artifacts"
     save_plots: bool = True
     plot_grid: int = 120
+    solution_slice_times: list[float] = field(
+        default_factory=lambda: [0.5, 1.0, 1.5, 2.0],
+    )
     model: ModelConfig = field(default_factory=ModelConfig)
     training: TrainingConfig = field(default_factory=TrainingConfig)
     controller_params: dict[str, dict[str, Any]] = field(default_factory=dict)
