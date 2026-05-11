@@ -51,6 +51,7 @@
       "max_weight_share": 0.6,
       "include_initial_loss_ratios": true,
       "policy_bias": false,
+      "policy_hidden_dim": null,
       "zero_init_policy": true
     },
     "softadapt": {

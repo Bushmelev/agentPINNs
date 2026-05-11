@@ -14,15 +14,26 @@ class LinearRLPolicy(nn.Module):
         action_dim: int,
         sigma: float = 0.1,
         bias: bool = False,
+        hidden_dim: int | None = None,
     ):
         super().__init__()
         if sigma <= 0.0:
             raise ValueError("sigma must be positive")
-        self.linear = nn.Linear(state_dim, action_dim, bias=bias)
+        if hidden_dim is not None and hidden_dim <= 0:
+            hidden_dim = None
+        self.hidden_dim = hidden_dim
+        if hidden_dim is None:
+            self.net = nn.Linear(state_dim, action_dim, bias=bias)
+        else:
+            self.net = nn.Sequential(
+                nn.Linear(state_dim, hidden_dim, bias=bias),
+                nn.Tanh(),
+                nn.Linear(hidden_dim, action_dim, bias=bias),
+            )
         self.sigma = float(sigma)
 
     def mean(self, state: torch.Tensor) -> torch.Tensor:
-        return torch.tanh(self.linear(state))
+        return torch.tanh(self.net(state))
 
     def distribution(self, state: torch.Tensor) -> torch.distributions.Normal:
         mu = self.mean(state)
@@ -51,6 +62,7 @@ class TinyLossWeightAgent(BaseWeightAgent):
         entropy_coef: float = 0.0,
         zero_init_policy: bool = True,
         policy_bias: bool = False,
+        policy_hidden_dim: int | None = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -59,6 +71,7 @@ class TinyLossWeightAgent(BaseWeightAgent):
         self.entropy_coef = float(entropy_coef)
         self.zero_init_policy = bool(zero_init_policy)
         self.policy_bias = bool(policy_bias)
+        self.policy_hidden_dim = policy_hidden_dim
         self.policy: LinearRLPolicy | None = None
         self.optimizer: torch.optim.Optimizer | None = None
         self.baseline = 0.0
@@ -69,12 +82,21 @@ class TinyLossWeightAgent(BaseWeightAgent):
             self.action_dim,
             self.sigma,
             bias=self.policy_bias,
+            hidden_dim=self.policy_hidden_dim,
         ).to(self.device)
         if self.zero_init_policy:
-            nn.init.zeros_(self.policy.linear.weight)
-            if self.policy.linear.bias is not None:
-                nn.init.zeros_(self.policy.linear.bias)
+            output_layer = self._output_layer()
+            nn.init.zeros_(output_layer.weight)
+            if output_layer.bias is not None:
+                nn.init.zeros_(output_layer.bias)
         self._rebuild_optimizer()
+
+    def _output_layer(self) -> nn.Linear:
+        if self.policy is None:
+            raise RuntimeError("TinyLossWeightAgent is not bound")
+        if isinstance(self.policy.net, nn.Linear):
+            return self.policy.net
+        return self.policy.net[-1]
 
     def _rebuild_optimizer(self) -> None:
         if self.policy is None:
