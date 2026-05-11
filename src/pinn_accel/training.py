@@ -298,20 +298,21 @@ def train_one(
                     weights_t,
                 )
             progress = step / float(max(total_steps, 1))
-            snapshot = StepSnapshot(
-                step=step,
-                total=equal_total,
-                losses=raw_losses,
-                weights=weights_np,
-                progress=progress,
-                done=step == total_steps,
-            )
-            extras = controller.after_step(snapshot, baseline_history)
             relative_l2 = None
             if relative_l2_metric is not None and (
                 step % train_cfg.relative_l2_every == 0 or step == total_steps
             ):
                 relative_l2 = relative_l2_metric(train_model)
+            snapshot = StepSnapshot(
+                step=step,
+                total=equal_total,
+                losses=raw_losses,
+                weights=weights_np,
+                relative_l2=relative_l2,
+                progress=progress,
+                done=step == total_steps,
+            )
+            extras = controller.after_step(snapshot, baseline_history)
 
             history["equal_weight_total"].append(equal_total)
             history["weighted_total"].append(weighted_total)

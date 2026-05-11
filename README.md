@@ -108,6 +108,11 @@ def residual(model, xt):
 }
 ```
 
+Доступные baseline reward для агента включают `baseline_gap`,
+`normalized_baseline_gap` и `normalized_baseline_gap_delta`.
+Также есть reward по ошибке решения: `relative_l2_improvement`,
+`relative_l2_baseline_gap` и `relative_l2_baseline_gap_delta`.
+
 ## Изменить агента
 
 Текущий агент — `TinyLossWeightAgent` в `src/pinn_accel/agents/tiny.py`. Его состояние:

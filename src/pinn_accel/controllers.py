@@ -32,6 +32,7 @@ class StepSnapshot:
     total: float
     losses: np.ndarray
     weights: np.ndarray
+    relative_l2: float | None
     progress: float
     done: bool
 
@@ -267,6 +268,7 @@ class AgentWeightController(WeightController):
         self.update_interval = int(update_interval)
         self.warmup_steps = int(warmup_steps)
         self._weights_np: np.ndarray | None = None
+        self._initial_snapshot: StepSnapshot | None = None
         self._previous_state: np.ndarray | None = None
         self._previous_action: np.ndarray | None = None
         self._previous_snapshot: StepSnapshot | None = None
@@ -308,6 +310,8 @@ class AgentWeightController(WeightController):
     ) -> dict[str, float | None]:
         if self._weights_np is None:
             raise RuntimeError("AgentWeightController is not bound")
+        if self._initial_snapshot is None:
+            self._initial_snapshot = snapshot
         if snapshot.step < self.warmup_steps:
             return {"agent_reward": None}
         if snapshot.step % self.update_interval != 0 and not snapshot.done:
@@ -345,16 +349,36 @@ class AgentWeightController(WeightController):
     ) -> RewardContext:
         if self._previous_snapshot is None:
             raise RuntimeError("previous snapshot is missing")
+        if self._initial_snapshot is None:
+            raise RuntimeError("initial snapshot is missing")
+        initial = self._initial_snapshot
         previous = self._previous_snapshot
+        baseline_initial = None
         baseline_previous = None
         baseline_current = None
+        baseline_initial_relative_l2 = None
+        baseline_previous_relative_l2 = None
+        baseline_current_relative_l2 = None
         baseline_previous_losses = None
         baseline_current_losses = None
         if self.reward.requires_baseline:
             if baseline_history is None:
                 raise ValueError(f"{self.reward.name} requires a baseline history")
+            baseline_initial = _history_total_at(baseline_history, initial.step)
             baseline_previous = _history_total_at(baseline_history, previous.step)
             baseline_current = _history_total_at(baseline_history, snapshot.step)
+            baseline_initial_relative_l2 = _history_relative_l2_at(
+                baseline_history,
+                initial.step,
+            )
+            baseline_previous_relative_l2 = _history_relative_l2_at(
+                baseline_history,
+                previous.step,
+            )
+            baseline_current_relative_l2 = _history_relative_l2_at(
+                baseline_history,
+                snapshot.step,
+            )
             baseline_previous_losses = _history_losses_at(
                 baseline_history,
                 previous.step,
@@ -366,12 +390,20 @@ class AgentWeightController(WeightController):
                 self.component_names,
             )
         return RewardContext(
+            initial_total=initial.total,
             previous_total=previous.total,
             current_total=snapshot.total,
             previous_losses=previous.losses,
             current_losses=snapshot.losses,
+            initial_relative_l2=initial.relative_l2,
+            previous_relative_l2=previous.relative_l2,
+            current_relative_l2=snapshot.relative_l2,
+            baseline_initial_total=baseline_initial,
             baseline_previous_total=baseline_previous,
             baseline_current_total=baseline_current,
+            baseline_initial_relative_l2=baseline_initial_relative_l2,
+            baseline_previous_relative_l2=baseline_previous_relative_l2,
+            baseline_current_relative_l2=baseline_current_relative_l2,
             baseline_previous_losses=baseline_previous_losses,
             baseline_current_losses=baseline_current_losses,
         )
@@ -386,6 +418,15 @@ def _history_total_at(history: dict[str, Any], step: int) -> float:
 def _history_losses_at(history: dict[str, Any], step: int, names: list[str]) -> np.ndarray:
     index = min(max(step - 1, 0), len(history["equal_weight_total"]) - 1)
     return np.array([history["components"][name][index] for name in names], dtype=np.float64)
+
+
+def _history_relative_l2_at(history: dict[str, Any], step: int) -> float | None:
+    values = history.get("relative_l2", [])
+    if not values:
+        return None
+    index = min(max(step - 1, 0), len(values) - 1)
+    value = values[index]
+    return None if value is None else float(value)
 
 
 def make_controller(
