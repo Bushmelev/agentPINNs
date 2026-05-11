@@ -295,8 +295,9 @@ def save_solution_slice_comparison(
     ncols = min(2, len(valid_times))
     nrows = int(np.ceil(len(valid_times) / ncols))
     fig, axes = plt.subplots(nrows, ncols, figsize=(6 * ncols, 3.8 * nrows), squeeze=False)
+    fig.subplots_adjust(hspace=0.45, wspace=0.25)
     axes_flat = axes.reshape(-1)
-    for axis, requested_time in zip(axes_flat, valid_times):
+    for plot_idx, (axis, requested_time) in enumerate(zip(axes_flat, valid_times)):
         plot_time = requested_time
         if t_ref is not None and u_ref is not None:
             time_index = int(np.argmin(np.abs(t_ref - requested_time)))
@@ -319,7 +320,8 @@ def save_solution_slice_comparison(
                 alpha=0.95,
             )
         axis.set_title(f"t={plot_time:.3g}")
-        axis.set_xlabel("x")
+        if plot_idx // ncols == nrows - 1:
+            axis.set_xlabel("x")
         axis.set_ylabel("u")
         axis.grid(True, ls="--", alpha=0.3)
     for axis in axes_flat[len(valid_times) :]:
