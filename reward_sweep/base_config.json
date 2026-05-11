@@ -1,0 +1,70 @@
+{
+  "equation": "burgers",
+  "equation_params": {
+    "nu": 0.001,
+    "data_path": "../hdf5-files/1D_Burgers_one_harmonic.hdf5",
+    "sample_id": 0,
+    "target_time": 0.0
+  },
+  "controllers": ["fixed", "tiny_loss_weight"],
+  "sweep_rewards": [
+    "log_ratio",
+    "relative_improvement",
+    "component_relative_improvement",
+    "baseline_gap",
+    "normalized_baseline_gap",
+    "normalized_baseline_gap_delta",
+    "relative_l2_improvement",
+    "relative_l2_baseline_gap",
+    "relative_l2_baseline_gap_delta"
+  ],
+  "seed": 1234,
+  "device": "auto",
+  "output_dir": "artifacts/reward_sweep",
+  "save_plots": true,
+  "plot_grid": 120,
+  "solution_slice_times": [0.5, 1.0, 1.5, 2.0],
+  "model": {
+    "layers": [2, 40, 40, 40, 40, 1],
+    "activation": "tanh"
+  },
+  "training": {
+    "steps": 8000,
+    "full_batch": true,
+    "batch_sizes": {},
+    "pool_sizes": {},
+    "optimizer_mode": "adam",
+    "optimizer": "adam",
+    "lr": 0.001,
+    "weight_decay": 0.0,
+    "scheduler": "constant",
+    "adam_steps": null,
+    "lbfgs_steps": null,
+    "lbfgs_lr": 1.0,
+    "lbfgs_max_iter": 20,
+    "lbfgs_max_eval": null,
+    "lbfgs_history_size": 100,
+    "lbfgs_tolerance_grad": 1e-7,
+    "lbfgs_tolerance_change": 1e-9,
+    "lbfgs_line_search_fn": "strong_wolfe",
+    "log_every": 100,
+    "relative_l2_every": 1,
+    "relative_l2_chunk_size": 65536,
+    "agent_update_interval": 25,
+    "agent_warmup_steps": 0,
+    "compile_model": false
+  },
+  "controller_params": {
+    "tiny_loss_weight": {
+      "reward": "baseline_gap",
+      "sigma": 0.1,
+      "action_scale": 0.1,
+      "min_weight_share": 0.1,
+      "max_weight_share": 0.7,
+      "include_initial_loss_ratios": true,
+      "policy_bias": false,
+      "policy_hidden_dim": null,
+      "zero_init_policy": true
+    }
+  }
+}
