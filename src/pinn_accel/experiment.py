@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from .artifacts import ArtifactStore
+from .checkpoints import build_result_checkpoint
 from .config import ExperimentConfig
 from .controllers import controller_needs_baseline, make_controller
 from .equations import get_equation
@@ -35,22 +36,16 @@ def _save_result(
     store.save_history(spec.name, label, result.history)
     if result.history.get("batch_info") is not None:
         store.save_json(method_dir / "batch_info.json", result.history["batch_info"])
-    store.save_checkpoint(
-        spec.name,
-        label,
-        {
-            "equation": spec.name,
-            "controller": label,
-            "model_config": (
-                cfg.model.to_dict()
-                if hasattr(cfg.model, "to_dict")
-                else cfg.model.__dict__
-            ),
-            "training_config": cfg.training.__dict__,
-            "state_dict": result.model.state_dict(),
-            "history": result.history,
-        },
+    checkpoint = build_result_checkpoint(
+        equation_name=spec.name,
+        label=label,
+        result=result,
+        model_config=cfg.model,
+        training_config=cfg.training,
     )
+    store.save_checkpoint(spec.name, label, checkpoint)
+    if checkpoint.get("agent") is not None:
+        store.save_agent_checkpoint(spec.name, label, checkpoint["agent"])
     if cfg.save_plots:
         save_history_plots(result.history, method_dir / "plots")
         save_solution_plot(

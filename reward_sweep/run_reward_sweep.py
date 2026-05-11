@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +21,7 @@ import numpy as np  # noqa: E402
 import torch  # noqa: E402
 
 from pinn_accel.artifacts import ArtifactStore, to_jsonable  # noqa: E402
+from pinn_accel.checkpoints import build_result_checkpoint  # noqa: E402
 from pinn_accel.config import ExperimentConfig  # noqa: E402
 from pinn_accel.controllers import make_controller  # noqa: E402
 from pinn_accel.equations import get_equation  # noqa: E402
@@ -155,18 +155,16 @@ def _save_result(
     store.save_history(spec.name, label, result.history)
     if result.history.get("batch_info") is not None:
         store.save_json(method_dir / "batch_info.json", result.history["batch_info"])
-    store.save_checkpoint(
-        spec.name,
-        label,
-        {
-            "equation": spec.name,
-            "controller": label,
-            "model_config": asdict(cfg.model),
-            "training_config": asdict(cfg.training),
-            "state_dict": result.model.state_dict(),
-            "history": result.history,
-        },
+    checkpoint = build_result_checkpoint(
+        equation_name=spec.name,
+        label=label,
+        result=result,
+        model_config=cfg.model,
+        training_config=cfg.training,
     )
+    store.save_checkpoint(spec.name, label, checkpoint)
+    if checkpoint.get("agent") is not None:
+        store.save_agent_checkpoint(spec.name, label, checkpoint["agent"])
     if cfg.save_plots:
         save_history_plots(result.history, method_dir / "plots")
         save_solution_plot(

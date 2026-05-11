@@ -70,3 +70,14 @@ class ArtifactStore:
         path.parent.mkdir(parents=True, exist_ok=True)
         torch.save(payload, path)
         return path
+
+    def save_agent_checkpoint(
+        self,
+        equation_name: str,
+        label: str,
+        payload: dict[str, Any],
+    ) -> Path:
+        path = self.method_dir(equation_name, label) / "agent_checkpoint.pt"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        torch.save(payload, path)
+        return path
