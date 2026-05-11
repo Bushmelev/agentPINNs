@@ -8,11 +8,17 @@ from .base import BaseWeightAgent
 
 
 class LinearRLPolicy(nn.Module):
-    def __init__(self, state_dim: int, action_dim: int, sigma: float = 0.1):
+    def __init__(
+        self,
+        state_dim: int,
+        action_dim: int,
+        sigma: float = 0.1,
+        bias: bool = False,
+    ):
         super().__init__()
         if sigma <= 0.0:
             raise ValueError("sigma must be positive")
-        self.linear = nn.Linear(state_dim, action_dim)
+        self.linear = nn.Linear(state_dim, action_dim, bias=bias)
         self.sigma = float(sigma)
 
     def mean(self, state: torch.Tensor) -> torch.Tensor:
@@ -44,6 +50,7 @@ class TinyLossWeightAgent(BaseWeightAgent):
         baseline_beta: float = 0.9,
         entropy_coef: float = 0.0,
         zero_init_policy: bool = True,
+        policy_bias: bool = False,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -51,6 +58,7 @@ class TinyLossWeightAgent(BaseWeightAgent):
         self.baseline_beta = float(baseline_beta)
         self.entropy_coef = float(entropy_coef)
         self.zero_init_policy = bool(zero_init_policy)
+        self.policy_bias = bool(policy_bias)
         self.policy: LinearRLPolicy | None = None
         self.optimizer: torch.optim.Optimizer | None = None
         self.baseline = 0.0
@@ -60,10 +68,12 @@ class TinyLossWeightAgent(BaseWeightAgent):
             self.state_dim(),
             self.action_dim,
             self.sigma,
+            bias=self.policy_bias,
         ).to(self.device)
         if self.zero_init_policy:
             nn.init.zeros_(self.policy.linear.weight)
-            nn.init.zeros_(self.policy.linear.bias)
+            if self.policy.linear.bias is not None:
+                nn.init.zeros_(self.policy.linear.bias)
         self._rebuild_optimizer()
 
     def _rebuild_optimizer(self) -> None:

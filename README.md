@@ -117,7 +117,7 @@ def residual(model, xt):
 - `log(loss / initial_loss)`
 - `progress`
 
-Политика — один линейный слой `LinearRLPolicy` с нормальным шумом действия. При необходимости можно менять состав состояния в `BaseWeightAgent.make_state()`.
+Политика — один линейный слой `LinearRLPolicy` с нормальным шумом действия. По умолчанию слой без bias (`policy_bias=false`). При необходимости можно менять состав состояния в `BaseWeightAgent.make_state()`.
 
 Агент должен наследоваться от `BaseWeightAgent` и реализовать:
 

@@ -2,7 +2,7 @@
   "equation": "burgers",
   "equation_params": {
     "nu": 0.001,
-    "data_path": "../hdf5-files/1D_Burgers.hdf5",
+    "data_path": "../hdf5-files/1D_Burgers_one_harmonic.hdf5",
     "sample_id": 0,
     "target_time": 0.0
   },
@@ -50,6 +50,7 @@
       "min_weight_share": 0.1,
       "max_weight_share": 0.6,
       "include_initial_loss_ratios": true,
+      "policy_bias": false,
       "zero_init_policy": true
     },
     "softadapt": {
