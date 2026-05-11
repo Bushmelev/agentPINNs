@@ -168,6 +168,24 @@ def save_history_plots(history: Mapping, plot_dir: Path) -> None:
         plt.grid(True, ls="--", alpha=0.3)
         _save(fig, plot_dir / "agent_reward.png")
 
+    sigmas = history.get("agent_sigma")
+    if sigmas is not None and any(value is not None for value in sigmas):
+        sigma_values = np.array(
+            [np.nan if value is None else float(value) for value in sigmas],
+            dtype=np.float64,
+        )
+        mask = np.isfinite(sigma_values)
+        fig = plt.figure(figsize=(7, 4))
+        plt.plot(
+            steps[mask],
+            sigma_values[mask],
+            color=method_color,
+        )
+        plt.xlabel("step")
+        plt.ylabel("sigma")
+        plt.grid(True, ls="--", alpha=0.3)
+        _save(fig, plot_dir / "agent_sigma.png")
+
 
 def save_comparison_plots(histories: Mapping[str, Mapping], plot_dir: Path) -> None:
     if not histories:

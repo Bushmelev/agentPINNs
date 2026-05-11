@@ -141,6 +141,7 @@ def run_experiment(cfg: ExperimentConfig) -> Path:
             "final_weighted_total": result.history["weighted_total"][-1],
             "final_relative_l2": _last_finite(result.history.get("relative_l2", [])),
             "final_weights": result.history["weights"][-1],
+            "final_agent_sigma": _last_finite(result.history.get("agent_sigma", [])),
         }
         for label, result in results.items()
     }

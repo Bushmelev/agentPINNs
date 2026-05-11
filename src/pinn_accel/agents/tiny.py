@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -15,13 +17,23 @@ class LinearRLPolicy(nn.Module):
         sigma: float = 0.1,
         bias: bool = False,
         hidden_dim: int | None = None,
+        learn_sigma: bool = False,
+        sigma_min: float = 1e-4,
+        sigma_max: float | None = None,
     ):
         super().__init__()
         if sigma <= 0.0:
             raise ValueError("sigma must be positive")
+        if sigma_min <= 0.0:
+            raise ValueError("sigma_min must be positive")
+        if sigma_max is not None and sigma_max <= sigma_min:
+            raise ValueError("sigma_max must be greater than sigma_min")
         if hidden_dim is not None and hidden_dim <= 0:
             hidden_dim = None
         self.hidden_dim = hidden_dim
+        self.learn_sigma = bool(learn_sigma)
+        self.sigma_min = float(sigma_min)
+        self.sigma_max = None if sigma_max is None else float(sigma_max)
         if hidden_dim is None:
             self.net = nn.Linear(state_dim, action_dim, bias=bias)
         else:
@@ -30,14 +42,29 @@ class LinearRLPolicy(nn.Module):
                 nn.Tanh(),
                 nn.Linear(hidden_dim, action_dim, bias=bias),
             )
-        self.sigma = float(sigma)
+        initial_log_sigma = math.log(float(sigma))
+        if self.learn_sigma:
+            self.log_sigma = nn.Parameter(
+                torch.tensor(initial_log_sigma, dtype=torch.float32)
+            )
+        else:
+            self.register_buffer(
+                "log_sigma",
+                torch.tensor(initial_log_sigma, dtype=torch.float32),
+            )
 
     def mean(self, state: torch.Tensor) -> torch.Tensor:
         return torch.tanh(self.net(state))
 
+    def sigma_value(self) -> torch.Tensor:
+        sigma = torch.exp(self.log_sigma)
+        if self.sigma_max is None:
+            return torch.clamp(sigma, min=self.sigma_min)
+        return torch.clamp(sigma, min=self.sigma_min, max=self.sigma_max)
+
     def distribution(self, state: torch.Tensor) -> torch.distributions.Normal:
         mu = self.mean(state)
-        std = torch.full_like(mu, self.sigma)
+        std = self.sigma_value().to(dtype=mu.dtype, device=mu.device).expand_as(mu)
         return torch.distributions.Normal(mu, std)
 
     def forward(self, state: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
@@ -63,10 +90,16 @@ class TinyLossWeightAgent(BaseWeightAgent):
         zero_init_policy: bool = True,
         policy_bias: bool = False,
         policy_hidden_dim: int | None = None,
+        learn_sigma: bool = False,
+        sigma_min: float = 1e-4,
+        sigma_max: float | None = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.sigma = float(sigma)
+        self.learn_sigma = bool(learn_sigma)
+        self.sigma_min = float(sigma_min)
+        self.sigma_max = None if sigma_max is None else float(sigma_max)
         self.baseline_beta = float(baseline_beta)
         self.entropy_coef = float(entropy_coef)
         self.zero_init_policy = bool(zero_init_policy)
@@ -83,6 +116,9 @@ class TinyLossWeightAgent(BaseWeightAgent):
             self.sigma,
             bias=self.policy_bias,
             hidden_dim=self.policy_hidden_dim,
+            learn_sigma=self.learn_sigma,
+            sigma_min=self.sigma_min,
+            sigma_max=self.sigma_max,
         ).to(self.device)
         if self.zero_init_policy:
             output_layer = self._output_layer()
@@ -140,6 +176,11 @@ class TinyLossWeightAgent(BaseWeightAgent):
             else:
                 action = self.policy.mean(state_t)
         return action.cpu().numpy().astype(np.float32)
+
+    def current_sigma(self) -> float | None:
+        if self.policy is None:
+            return None
+        return float(self.policy.sigma_value().detach().cpu().item())
 
     def update(
         self,

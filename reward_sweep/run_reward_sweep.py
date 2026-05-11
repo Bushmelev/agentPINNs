@@ -226,6 +226,30 @@ def _plot_agent_rewards(
     plt.close(fig)
 
 
+def _plot_agent_sigmas(
+    reward_histories: dict[str, dict[str, Any]],
+    path: Path,
+) -> None:
+    fig = plt.figure(figsize=(8, 5))
+    has_values = False
+    for reward, history in reward_histories.items():
+        steps, values = _finite_series(history.get("agent_sigma", []))
+        if not values.size:
+            continue
+        has_values = True
+        plt.plot(steps, values, label=reward, color=REWARD_COLORS.get(reward))
+    if not has_values:
+        plt.close(fig)
+        return
+    plt.xlabel("step")
+    plt.ylabel("sigma")
+    plt.grid(True, ls="--", alpha=0.3)
+    plt.legend(fontsize=8)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path, dpi=180, bbox_inches="tight")
+    plt.close(fig)
+
+
 def _plot_weights(
     reward_histories: dict[str, dict[str, Any]],
     path: Path,
@@ -378,6 +402,7 @@ def _save_sweep_plots(
         log_y=True,
     )
     _plot_agent_rewards(reward_histories, plot_dir / "reward_sweep_agent_reward.png")
+    _plot_agent_sigmas(reward_histories, plot_dir / "reward_sweep_agent_sigma.png")
     _plot_weights(reward_histories, plot_dir / "reward_sweep_weights.png")
     _plot_solution_slices(
         fixed_result.model,
@@ -473,6 +498,7 @@ def main() -> None:
                 "final_relative_l2": _last_finite(result.history.get("relative_l2", [])),
                 "final_weights": result.history["weights"][-1],
                 "final_agent_reward": _last_finite(result.history.get("agent_reward", [])),
+                "final_agent_sigma": _last_finite(result.history.get("agent_sigma", [])),
             }
             for reward, result in reward_results.items()
         },

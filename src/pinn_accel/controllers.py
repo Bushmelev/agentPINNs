@@ -310,12 +310,13 @@ class AgentWeightController(WeightController):
     ) -> dict[str, float | None]:
         if self._weights_np is None:
             raise RuntimeError("AgentWeightController is not bound")
+        sigma = self._agent_sigma()
         if self._initial_snapshot is None:
             self._initial_snapshot = snapshot
         if snapshot.step < self.warmup_steps:
-            return {"agent_reward": None}
+            return {"agent_reward": None, "agent_sigma": sigma}
         if snapshot.step % self.update_interval != 0 and not snapshot.done:
-            return {"agent_reward": None}
+            return {"agent_reward": None, "agent_sigma": sigma}
 
         state = self.agent.make_state(snapshot.losses, self._weights_np, snapshot.progress)
         reward_value = None
@@ -340,7 +341,13 @@ class AgentWeightController(WeightController):
         self._previous_state = state
         self._previous_action = np.asarray(action, dtype=np.float32).copy()
         self._previous_snapshot = snapshot
-        return {"agent_reward": reward_value}
+        return {"agent_reward": reward_value, "agent_sigma": self._agent_sigma()}
+
+    def _agent_sigma(self) -> float | None:
+        sigma_getter = getattr(self.agent, "current_sigma", None)
+        if sigma_getter is None:
+            return None
+        return sigma_getter()
 
     def _make_reward_context(
         self,

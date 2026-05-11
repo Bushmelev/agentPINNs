@@ -47,6 +47,9 @@
     "tiny_loss_weight": {
       "reward": "normalized_baseline_gap",
       "sigma": 0.1,
+      "learn_sigma": false,
+      "sigma_min": 0.0001,
+      "sigma_max": null,
       "action_scale": 0.1,
       "min_weight_share": 0.1,
       "max_weight_share": 0.7,

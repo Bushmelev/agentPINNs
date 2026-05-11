@@ -63,6 +63,7 @@ def _empty_history(component_names: list[str], controller_name: str) -> dict[str
         "lr": [],
         "optimizer_phase": [],
         "agent_reward": [],
+        "agent_sigma": [],
     }
 
 
@@ -323,6 +324,7 @@ def train_one(
             history["lr"].append(float(phase.optimizer.param_groups[0]["lr"]))
             history["optimizer_phase"].append(phase.name)
             history["agent_reward"].append(extras.get("agent_reward"))
+            history["agent_sigma"].append(extras.get("agent_sigma"))
 
             if train_cfg.log_every > 0 and step % train_cfg.log_every == 0:
                 pieces = " ".join(
