@@ -84,6 +84,9 @@ class WeightController(nn.Module):
         del snapshot, baseline_history
         return {}
 
+    def frozen_step_extras(self) -> dict[str, float | None]:
+        return {}
+
 
 class FixedController(WeightController):
     name = "fixed"
@@ -342,6 +345,9 @@ class AgentWeightController(WeightController):
         self._previous_action = np.asarray(action, dtype=np.float32).copy()
         self._previous_snapshot = snapshot
         return {"agent_reward": reward_value, "agent_sigma": self._agent_sigma()}
+
+    def frozen_step_extras(self) -> dict[str, float | None]:
+        return {"agent_reward": None, "agent_sigma": self._agent_sigma()}
 
     def _agent_sigma(self) -> float | None:
         sigma_getter = getattr(self.agent, "current_sigma", None)

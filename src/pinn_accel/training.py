@@ -64,6 +64,7 @@ def _empty_history(component_names: list[str], controller_name: str) -> dict[str
         "optimizer_phase": [],
         "agent_reward": [],
         "agent_sigma": [],
+        "agent_frozen": [],
     }
 
 
@@ -313,7 +314,15 @@ def train_one(
                 progress=progress,
                 done=step == total_steps,
             )
-            extras = controller.after_step(snapshot, baseline_history)
+            agent_frozen = (
+                phase.name == "lbfgs"
+                and train_cfg.freeze_agent_during_lbfgs
+                and controller.uses_agent
+            )
+            if agent_frozen:
+                extras = controller.frozen_step_extras()
+            else:
+                extras = controller.after_step(snapshot, baseline_history)
 
             history["equal_weight_total"].append(equal_total)
             history["weighted_total"].append(weighted_total)
@@ -325,6 +334,7 @@ def train_one(
             history["optimizer_phase"].append(phase.name)
             history["agent_reward"].append(extras.get("agent_reward"))
             history["agent_sigma"].append(extras.get("agent_sigma"))
+            history["agent_frozen"].append(agent_frozen)
 
             if train_cfg.log_every > 0 and step % train_cfg.log_every == 0:
                 pieces = " ".join(
