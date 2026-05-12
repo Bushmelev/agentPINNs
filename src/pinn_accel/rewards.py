@@ -10,6 +10,7 @@ class RewardContext:
     initial_total: float
     previous_total: float
     current_total: float
+    initial_losses: np.ndarray
     previous_losses: np.ndarray
     current_losses: np.ndarray
     progress: float = 0.0
@@ -128,6 +129,16 @@ def _component_baseline_progress_delta(ctx: RewardContext) -> np.ndarray:
     return agent_progress - baseline_progress
 
 
+def _log_loss_progress(previous: np.ndarray, current: np.ndarray) -> np.ndarray:
+    eps = 1e-8
+    return np.log((previous + eps) / (current + eps))
+
+
+def _log_ratio(previous: float, current: float) -> float:
+    eps = 1e-8
+    return float(np.log((previous + eps) / (current + eps)))
+
+
 class RelativeL2ImprovementReward(Reward):
     name = "relative_l2_improvement"
 
@@ -135,6 +146,40 @@ class RelativeL2ImprovementReward(Reward):
         _, previous, current = _require_relative_l2(ctx)
         eps = 1e-8
         return float((previous - current) / (abs(previous) + eps))
+
+
+class RelativeL2LogImprovementReward(Reward):
+    name = "relative_l2_log_improvement"
+
+    def __call__(self, ctx: RewardContext) -> float:
+        _, previous, current = _require_relative_l2(ctx)
+        return _log_ratio(previous, current)
+
+
+class WorstComponentRelativeImprovementReward(Reward):
+    name = "worst_component_relative_improvement"
+
+    def __call__(self, ctx: RewardContext) -> float:
+        return float(np.min(_log_loss_progress(ctx.previous_losses, ctx.current_losses)))
+
+
+class ComponentBalancePenaltyReward(Reward):
+    name = "component_balance_penalty"
+
+    def __init__(self, beta: float = 0.1):
+        if beta < 0.0:
+            raise ValueError("beta must be non-negative")
+        self.beta = float(beta)
+
+    def __call__(self, ctx: RewardContext) -> float:
+        eps = 1e-8
+        progress_reward = float(
+            np.mean(_log_loss_progress(ctx.previous_losses, ctx.current_losses))
+        )
+        component_ratios = np.log(
+            (ctx.current_losses + eps) / (ctx.initial_losses + eps)
+        )
+        return float(progress_reward - self.beta * float(np.std(component_ratios)))
 
 
 class BaselineGapReward(Reward):
@@ -260,6 +305,36 @@ class LossL2HybridReward(Reward):
         return float(self.beta * loss_reward + (1.0 - self.beta) * l2_reward)
 
 
+class LossL2SelfHybridReward(Reward):
+    name = "loss_l2_self_hybrid"
+
+    def __init__(self, beta: float = 0.5):
+        if not 0.0 <= beta <= 1.0:
+            raise ValueError("beta must be in [0, 1]")
+        self.beta = float(beta)
+
+    def __call__(self, ctx: RewardContext) -> float:
+        _, previous_l2, current_l2 = _require_relative_l2(ctx)
+        loss_reward = _log_ratio(ctx.previous_total, ctx.current_total)
+        l2_reward = _log_ratio(previous_l2, current_l2)
+        return float(self.beta * loss_reward + (1.0 - self.beta) * l2_reward)
+
+
+class RunningBestL2Reward(Reward):
+    name = "running_best_l2_reward"
+
+    def __init__(self):
+        self.best_relative_l2: float | None = None
+
+    def __call__(self, ctx: RewardContext) -> float:
+        initial, previous, current = _require_relative_l2(ctx)
+        if self.best_relative_l2 is None:
+            self.best_relative_l2 = min(float(initial), float(previous))
+        reward = _log_ratio(self.best_relative_l2, current)
+        self.best_relative_l2 = min(self.best_relative_l2, float(current))
+        return reward
+
+
 class ProgressiveLossL2HybridReward(Reward):
     name = "progressive_loss_l2_hybrid"
     requires_baseline = True
@@ -289,6 +364,9 @@ REWARD_REGISTRY = {
     "relative_improvement": RelativeImprovementReward,
     "component_relative_improvement": ComponentRelativeImprovementReward,
     "relative_l2_improvement": RelativeL2ImprovementReward,
+    "relative_l2_log_improvement": RelativeL2LogImprovementReward,
+    "worst_component_relative_improvement": WorstComponentRelativeImprovementReward,
+    "component_balance_penalty": ComponentBalancePenaltyReward,
     "baseline_gap": BaselineGapReward,
     "normalized_baseline_gap": NormalizedBaselineGapReward,
     "log_normalized_baseline_gap": LogNormalizedBaselineGapReward,
@@ -298,6 +376,8 @@ REWARD_REGISTRY = {
     "relative_l2_baseline_gap": RelativeL2BaselineGapReward,
     "relative_l2_baseline_gap_delta": RelativeL2BaselineGapDeltaReward,
     "loss_l2_hybrid": LossL2HybridReward,
+    "loss_l2_self_hybrid": LossL2SelfHybridReward,
+    "running_best_l2_reward": RunningBestL2Reward,
     "progressive_loss_l2_hybrid": ProgressiveLossL2HybridReward,
 }
 

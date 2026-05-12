@@ -46,6 +46,11 @@ ALL_REWARDS = [
     "worst_component_baseline_gap",
     "loss_l2_hybrid",
     "progressive_loss_l2_hybrid",
+    "worst_component_relative_improvement",
+    "component_balance_penalty",
+    "relative_l2_log_improvement",
+    "loss_l2_self_hybrid",
+    "running_best_l2_reward",
 ]
 
 
@@ -68,6 +73,11 @@ REWARD_COLORS = {
             "#ffbb78",
             "#98df8a",
             "#ff9896",
+            "#c5b0d5",
+            "#c49c94",
+            "#f7b6d2",
+            "#c7c7c7",
+            "#dbdb8d",
         ],
     )
 }

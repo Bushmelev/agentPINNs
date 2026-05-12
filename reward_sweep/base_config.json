@@ -21,7 +21,12 @@
     "component_baseline_gap",
     "worst_component_baseline_gap",
     "loss_l2_hybrid",
-    "progressive_loss_l2_hybrid"
+    "progressive_loss_l2_hybrid",
+    "worst_component_relative_improvement",
+    "component_balance_penalty",
+    "relative_l2_log_improvement",
+    "loss_l2_self_hybrid",
+    "running_best_l2_reward"
   ],
   "seed": 1234,
   "device": "auto",

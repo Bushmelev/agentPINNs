@@ -463,6 +463,7 @@ class AgentWeightController(WeightController):
             initial_total=initial.total,
             previous_total=previous.total,
             current_total=snapshot.total,
+            initial_losses=initial.losses,
             previous_losses=previous.losses,
             current_losses=snapshot.losses,
             progress=snapshot.agent_progress,
