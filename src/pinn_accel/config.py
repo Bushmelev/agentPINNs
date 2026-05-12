@@ -43,6 +43,7 @@ class TrainingConfig:
     relative_l2_chunk_size: int = 65536
     agent_update_interval: int = 25
     agent_warmup_steps: int = 0
+    freeze_weights_during_lbfgs: bool = True
     freeze_agent_during_lbfgs: bool = True
     compile_model: bool = False
 

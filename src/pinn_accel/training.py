@@ -64,6 +64,7 @@ def _empty_history(component_names: list[str], controller_name: str) -> dict[str
         "progress": [],
         "agent_progress": [],
         "optimizer_phase": [],
+        "weights_frozen": [],
         "agent_reward": [],
         "agent_sigma": [],
         "agent_frozen": [],
@@ -127,14 +128,17 @@ def _phase_step_counts(train_cfg: TrainingConfig) -> tuple[int, int]:
 
 
 def _make_optimizer_phases(
-    params: list[torch.nn.Parameter],
+    model_params: list[torch.nn.Parameter],
+    controller_params: list[torch.nn.Parameter],
     train_cfg: TrainingConfig,
+    controller: WeightController,
 ) -> list[OptimizerPhase]:
     adam_steps, lbfgs_steps = _phase_step_counts(train_cfg)
+    all_params = [*model_params, *controller_params]
     phases: list[OptimizerPhase] = []
     if adam_steps > 0:
         optimizer = make_optimizer(
-            params,
+            all_params,
             train_cfg.optimizer,
             lr=train_cfg.lr,
             weight_decay=train_cfg.weight_decay,
@@ -146,8 +150,13 @@ def _make_optimizer_phases(
         )
         phases.append(OptimizerPhase("adam", adam_steps, optimizer, scheduler))
     if lbfgs_steps > 0:
+        lbfgs_params = (
+            model_params
+            if _weights_frozen_in_phase("lbfgs", train_cfg, controller)
+            else all_params
+        )
         optimizer = make_lbfgs_optimizer(
-            params,
+            lbfgs_params,
             lr=train_cfg.lbfgs_lr,
             max_iter=train_cfg.lbfgs_max_iter,
             max_eval=train_cfg.lbfgs_max_eval,
@@ -162,15 +171,26 @@ def _make_optimizer_phases(
     return phases
 
 
+def _weights_frozen_in_phase(
+    phase_name: str,
+    train_cfg: TrainingConfig,
+    controller: WeightController,
+) -> bool:
+    if phase_name != "lbfgs":
+        return False
+    if train_cfg.freeze_weights_during_lbfgs and controller.name != "fixed":
+        return True
+    return train_cfg.freeze_agent_during_lbfgs and controller.uses_agent
+
+
 def _agent_active_in_phase(
     phase: OptimizerPhase,
     train_cfg: TrainingConfig,
     controller: WeightController,
 ) -> bool:
     return not (
-        phase.name == "lbfgs"
-        and train_cfg.freeze_agent_during_lbfgs
-        and controller.uses_agent
+        controller.uses_agent
+        and _weights_frozen_in_phase(phase.name, train_cfg, controller)
     )
 
 
@@ -244,10 +264,14 @@ def train_one(
     train_model = _maybe_compile(model, train_cfg.compile_model)
     controller.bind(component_names, np.ones(len(component_names), dtype=np.float32), device)
 
-    optimizer_params = list(model.parameters())
-    if controller.trainable:
-        optimizer_params.extend(list(controller.parameters()))
-    phases = _make_optimizer_phases(optimizer_params, train_cfg)
+    model_params = list(model.parameters())
+    controller_params = list(controller.parameters()) if controller.trainable else []
+    phases = _make_optimizer_phases(
+        model_params,
+        controller_params,
+        train_cfg,
+        controller,
+    )
     total_steps = sum(phase.steps for phase in phases)
     agent_total_steps = sum(
         phase.steps
@@ -272,18 +296,30 @@ def train_one(
     for phase in phases:
         for _ in range(phase.steps):
             step += 1
+            weights_frozen = _weights_frozen_in_phase(
+                phase.name,
+                train_cfg,
+                controller,
+            )
             agent_active = _agent_active_in_phase(phase, train_cfg, controller)
             if agent_active:
                 agent_step += 1
             batches = loss_evaluator.draw_batches()
             if phase.name == "lbfgs":
                 loss_pack = loss_evaluator.compute(train_model, batches)
-                objective, weights_t = controller.objective(
-                    loss_pack.values,
-                    model,
-                    step,
-                    update_state=True,
-                )
+                if weights_frozen:
+                    objective, weights_t = controller.frozen_objective(
+                        loss_pack.values,
+                        model,
+                        step,
+                    )
+                else:
+                    objective, weights_t = controller.objective(
+                        loss_pack.values,
+                        model,
+                        step,
+                        update_state=True,
+                    )
                 raw_losses, weights_np, equal_total, weighted_total = _history_values(
                     loss_pack,
                     component_names,
@@ -294,12 +330,19 @@ def train_one(
                 def closure() -> torch.Tensor:
                     phase.optimizer.zero_grad(set_to_none=True)
                     closure_pack = loss_evaluator.compute(train_model, batches)
-                    closure_objective, _ = controller.objective(
-                        closure_pack.values,
-                        model,
-                        step,
-                        update_state=False,
-                    )
+                    if weights_frozen:
+                        closure_objective, _ = controller.frozen_objective(
+                            closure_pack.values,
+                            model,
+                            step,
+                        )
+                    else:
+                        closure_objective, _ = controller.objective(
+                            closure_pack.values,
+                            model,
+                            step,
+                            update_state=False,
+                        )
                     closure_objective.backward()
                     return closure_objective
 
@@ -355,6 +398,7 @@ def train_one(
             history["progress"].append(progress)
             history["agent_progress"].append(agent_progress)
             history["optimizer_phase"].append(phase.name)
+            history["weights_frozen"].append(weights_frozen)
             history["agent_reward"].append(extras.get("agent_reward"))
             history["agent_sigma"].append(extras.get("agent_sigma"))
             history["agent_frozen"].append(agent_frozen)

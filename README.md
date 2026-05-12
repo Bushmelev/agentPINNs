@@ -74,6 +74,7 @@ python train.py --equation heat --controllers fixed,tiny_loss_weight,softadapt,r
 - `lbfgs`
 
 Для `adam_lbfgs` можно явно задать `adam_steps` и `lbfgs_steps`. Если их не задать, `steps` делится примерно 80/20 между Adam и L-BFGS.
+По умолчанию `freeze_weights_during_lbfgs=true`: в фазе L-BFGS adaptive-веса не пересчитываются, а L-BFGS оптимизирует только параметры PINN с последними весами из Adam.
 
 ## Добавить новое уравнение
 

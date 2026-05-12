@@ -77,6 +77,16 @@ class WeightController(nn.Module):
     ) -> tuple[torch.Tensor, torch.Tensor]:
         raise NotImplementedError
 
+    def frozen_objective(
+        self,
+        losses: torch.Tensor,
+        model: nn.Module,
+        step: int,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        del model, step
+        weights = self.effective_weights.to(losses.device)
+        return torch.sum(weights.detach() * losses), weights.detach()
+
     def after_step(
         self,
         snapshot: StepSnapshot,
@@ -103,6 +113,14 @@ class FixedController(WeightController):
         weights = self.base_weights.to(losses.device)
         self.effective_weights.copy_(weights.detach())
         return torch.sum(weights * losses), weights.detach()
+
+    def frozen_objective(
+        self,
+        losses: torch.Tensor,
+        model: nn.Module,
+        step: int,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        return self.objective(losses, model, step, update_state=False)
 
 
 class SoftAdaptController(WeightController):
@@ -143,6 +161,16 @@ class SoftAdaptController(WeightController):
                 self.previous_losses.copy_(losses.detach())
             weights = self.base_weights.to(losses.device) * lam
         self.effective_weights.copy_(weights.detach())
+        return torch.sum(weights.detach() * losses), weights.detach()
+
+    def frozen_objective(
+        self,
+        losses: torch.Tensor,
+        model: nn.Module,
+        step: int,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        del model, step
+        weights = self.effective_weights.to(losses.device)
         return torch.sum(weights.detach() * losses), weights.detach()
 
 
@@ -254,6 +282,22 @@ class GradNormController(WeightController):
         self.effective_weights.copy_(weights.detach())
         return model_loss + grad_loss, weights.detach()
 
+    def frozen_objective(
+        self,
+        losses: torch.Tensor,
+        model: nn.Module,
+        step: int,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        del model, step
+        if self.log_lambda is None:
+            raise RuntimeError("GradNormController is not bound")
+        with torch.no_grad():
+            lam = torch.exp(self.log_lambda.detach())
+            lam = len(lam) * lam / torch.clamp(lam.sum(), min=1e-8)
+            weights = self.base_weights.to(losses.device) * lam.to(losses.device)
+            self.effective_weights.copy_(weights.detach())
+        return torch.sum(weights.detach() * losses), weights.detach()
+
 
 class AgentWeightController(WeightController):
     name = "agent"
@@ -306,6 +350,14 @@ class AgentWeightController(WeightController):
         weights = torch.tensor(self._weights_np, dtype=losses.dtype, device=losses.device)
         self.effective_weights.copy_(weights.detach())
         return torch.sum(weights * losses), weights.detach()
+
+    def frozen_objective(
+        self,
+        losses: torch.Tensor,
+        model: nn.Module,
+        step: int,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        return self.objective(losses, model, step, update_state=False)
 
     def after_step(
         self,

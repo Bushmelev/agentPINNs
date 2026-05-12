@@ -41,6 +41,7 @@
     "relative_l2_chunk_size": 65536,
     "agent_update_interval": 25,
     "agent_warmup_steps": 0,
+    "freeze_weights_during_lbfgs": true,
     "freeze_agent_during_lbfgs": true,
     "compile_model": false
   },
