@@ -61,6 +61,8 @@ def _empty_history(component_names: list[str], controller_name: str) -> dict[str
         "components": {name: [] for name in component_names},
         "weights": [],
         "lr": [],
+        "progress": [],
+        "agent_progress": [],
         "optimizer_phase": [],
         "agent_reward": [],
         "agent_sigma": [],
@@ -160,6 +162,18 @@ def _make_optimizer_phases(
     return phases
 
 
+def _agent_active_in_phase(
+    phase: OptimizerPhase,
+    train_cfg: TrainingConfig,
+    controller: WeightController,
+) -> bool:
+    return not (
+        phase.name == "lbfgs"
+        and train_cfg.freeze_agent_during_lbfgs
+        and controller.uses_agent
+    )
+
+
 def _build_relative_l2_metric(
     spec: EquationSpec,
     device: torch.device,
@@ -235,6 +249,11 @@ def train_one(
         optimizer_params.extend(list(controller.parameters()))
     phases = _make_optimizer_phases(optimizer_params, train_cfg)
     total_steps = sum(phase.steps for phase in phases)
+    agent_total_steps = sum(
+        phase.steps
+        for phase in phases
+        if _agent_active_in_phase(phase, train_cfg, controller)
+    )
     relative_l2_metric = (
         _build_relative_l2_metric(
             spec,
@@ -248,10 +267,14 @@ def train_one(
     history["batch_info"] = loss_evaluator.batch_info
     start_time = time.time()
     step = 0
+    agent_step = 0
 
     for phase in phases:
         for _ in range(phase.steps):
             step += 1
+            agent_active = _agent_active_in_phase(phase, train_cfg, controller)
+            if agent_active:
+                agent_step += 1
             batches = loss_evaluator.draw_batches()
             if phase.name == "lbfgs":
                 loss_pack = loss_evaluator.compute(train_model, batches)
@@ -300,6 +323,7 @@ def train_one(
                     weights_t,
                 )
             progress = step / float(max(total_steps, 1))
+            agent_progress = agent_step / float(max(agent_total_steps, 1))
             relative_l2 = None
             if relative_l2_metric is not None and (
                 step % train_cfg.relative_l2_every == 0 or step == total_steps
@@ -312,13 +336,10 @@ def train_one(
                 weights=weights_np,
                 relative_l2=relative_l2,
                 progress=progress,
+                agent_progress=agent_progress,
                 done=step == total_steps,
             )
-            agent_frozen = (
-                phase.name == "lbfgs"
-                and train_cfg.freeze_agent_during_lbfgs
-                and controller.uses_agent
-            )
+            agent_frozen = not agent_active
             if agent_frozen:
                 extras = controller.frozen_step_extras()
             else:
@@ -331,6 +352,8 @@ def train_one(
                 history["components"][name].append(float(value))
             history["weights"].append(weights_np.tolist())
             history["lr"].append(float(phase.optimizer.param_groups[0]["lr"]))
+            history["progress"].append(progress)
+            history["agent_progress"].append(agent_progress)
             history["optimizer_phase"].append(phase.name)
             history["agent_reward"].append(extras.get("agent_reward"))
             history["agent_sigma"].append(extras.get("agent_sigma"))

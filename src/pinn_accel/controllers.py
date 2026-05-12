@@ -34,6 +34,7 @@ class StepSnapshot:
     weights: np.ndarray
     relative_l2: float | None
     progress: float
+    agent_progress: float
     done: bool
 
 
@@ -321,7 +322,11 @@ class AgentWeightController(WeightController):
         if snapshot.step % self.update_interval != 0 and not snapshot.done:
             return {"agent_reward": None, "agent_sigma": sigma}
 
-        state = self.agent.make_state(snapshot.losses, self._weights_np, snapshot.progress)
+        state = self.agent.make_state(
+            snapshot.losses,
+            self._weights_np,
+            snapshot.agent_progress,
+        )
         reward_value = None
         if (
             self._previous_state is not None
@@ -408,7 +413,7 @@ class AgentWeightController(WeightController):
             current_total=snapshot.total,
             previous_losses=previous.losses,
             current_losses=snapshot.losses,
-            progress=snapshot.progress,
+            progress=snapshot.agent_progress,
             initial_relative_l2=initial.relative_l2,
             previous_relative_l2=previous.relative_l2,
             current_relative_l2=snapshot.relative_l2,
