@@ -44,7 +44,7 @@
     "weight_decay": 0.0,
     "scheduler": "constant",
     "adam_steps": 8000,
-    "lbfgs_steps": 20,
+    "lbfgs_steps": 50,
     "lbfgs_lr": 1.0,
     "lbfgs_max_iter": 20,
     "lbfgs_max_eval": null,

@@ -58,6 +58,7 @@ def _method_label(label: str) -> str:
 
 
 def _save(fig: plt.Figure, path: Path) -> None:
+    path = path.with_suffix(".pdf")
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, dpi=180, bbox_inches="tight")
     plt.close(fig)
@@ -108,7 +109,7 @@ def save_history_plots(history: Mapping, plot_dir: Path) -> None:
     plt.ylabel("loss")
     plt.grid(True, which="both", ls="--", alpha=0.3)
     plt.legend()
-    _save(fig, plot_dir / "loss_total.png")
+    _save(fig, plot_dir / "loss_total.pdf")
 
     relative_l2 = history.get("relative_l2")
     if relative_l2 is not None and any(value is not None for value in relative_l2):
@@ -126,7 +127,7 @@ def save_history_plots(history: Mapping, plot_dir: Path) -> None:
         plt.xlabel("step")
         plt.ylabel("relative L2 error")
         plt.grid(True, which="both", ls="--", alpha=0.3)
-        _save(fig, plot_dir / "relative_l2.png")
+        _save(fig, plot_dir / "relative_l2.pdf")
 
     fig = plt.figure(figsize=(7, 4))
     for name in history["component_names"]:
@@ -135,7 +136,7 @@ def save_history_plots(history: Mapping, plot_dir: Path) -> None:
     plt.ylabel("loss")
     plt.grid(True, which="both", ls="--", alpha=0.3)
     plt.legend()
-    _save(fig, plot_dir / "loss_components.png")
+    _save(fig, plot_dir / "loss_components.pdf")
 
     weights = np.asarray(history["weights"], dtype=np.float64)
     fig = plt.figure(figsize=(7, 4))
@@ -145,7 +146,7 @@ def save_history_plots(history: Mapping, plot_dir: Path) -> None:
     plt.ylabel("weight")
     plt.grid(True, ls="--", alpha=0.3)
     plt.legend()
-    _save(fig, plot_dir / "weights.png")
+    _save(fig, plot_dir / "weights.pdf")
 
     rewards = history.get("agent_reward")
     if rewards is not None and any(value is not None for value in rewards):
@@ -166,7 +167,7 @@ def save_history_plots(history: Mapping, plot_dir: Path) -> None:
         plt.xlabel("step")
         plt.ylabel("reward")
         plt.grid(True, ls="--", alpha=0.3)
-        _save(fig, plot_dir / "agent_reward.png")
+        _save(fig, plot_dir / "agent_reward.pdf")
 
     sigmas = history.get("agent_sigma")
     if sigmas is not None and any(value is not None for value in sigmas):
@@ -184,7 +185,7 @@ def save_history_plots(history: Mapping, plot_dir: Path) -> None:
         plt.xlabel("step")
         plt.ylabel("sigma")
         plt.grid(True, ls="--", alpha=0.3)
-        _save(fig, plot_dir / "agent_sigma.png")
+        _save(fig, plot_dir / "agent_sigma.pdf")
 
 
 def save_comparison_plots(histories: Mapping[str, Mapping], plot_dir: Path) -> None:
@@ -201,7 +202,7 @@ def save_comparison_plots(histories: Mapping[str, Mapping], plot_dir: Path) -> N
     plt.ylabel("equal-weight loss")
     plt.grid(True, which="both", ls="--", alpha=0.3)
     plt.legend()
-    _save(fig, plot_dir / "comparison_equal_loss.png")
+    _save(fig, plot_dir / "comparison_equal_loss.pdf")
 
     fig = plt.figure(figsize=(7, 4))
     for label, history in histories.items():
@@ -214,7 +215,7 @@ def save_comparison_plots(histories: Mapping[str, Mapping], plot_dir: Path) -> N
     plt.ylabel("weighted loss")
     plt.grid(True, which="both", ls="--", alpha=0.3)
     plt.legend()
-    _save(fig, plot_dir / "comparison_weighted_loss.png")
+    _save(fig, plot_dir / "comparison_weighted_loss.pdf")
 
     if any(history.get("relative_l2") for history in histories.values()):
         fig = plt.figure(figsize=(7, 4))
@@ -239,7 +240,7 @@ def save_comparison_plots(histories: Mapping[str, Mapping], plot_dir: Path) -> N
         plt.ylabel("relative L2 error")
         plt.grid(True, which="both", ls="--", alpha=0.3)
         plt.legend()
-        _save(fig, plot_dir / "comparison_relative_l2.png")
+        _save(fig, plot_dir / "comparison_relative_l2.pdf")
 
     component_names = list(next(iter(histories.values()))["component_names"])
     fig, axes = plt.subplots(
@@ -260,7 +261,7 @@ def save_comparison_plots(histories: Mapping[str, Mapping], plot_dir: Path) -> N
         axis.grid(True, which="both", ls="--", alpha=0.3)
     axes[0].set_ylabel("loss")
     axes[0].legend()
-    _save(fig, plot_dir / "comparison_components.png")
+    _save(fig, plot_dir / "comparison_components.pdf")
 
     fig, axes = plt.subplots(
         1,
@@ -281,7 +282,7 @@ def save_comparison_plots(histories: Mapping[str, Mapping], plot_dir: Path) -> N
         axis.grid(True, ls="--", alpha=0.3)
     axes[0].set_ylabel("weight")
     axes[0].legend()
-    _save(fig, plot_dir / "comparison_weights.png")
+    _save(fig, plot_dir / "comparison_weights.pdf")
 
 
 def save_solution_slice_comparison(
@@ -345,7 +346,7 @@ def save_solution_slice_comparison(
     for axis in axes_flat[len(valid_times) :]:
         axis.axis("off")
     axes_flat[0].legend()
-    _save(fig, plot_dir / "comparison_solution_slices.png")
+    _save(fig, plot_dir / "comparison_solution_slices.pdf")
 
 
 def evaluate_grid(
@@ -382,4 +383,4 @@ def save_solution_plot(
     plt.colorbar(label="u(x,t)")
     plt.xlabel("x")
     plt.ylabel("t")
-    _save(fig, plot_dir / "solution.png")
+    _save(fig, plot_dir / "solution.pdf")

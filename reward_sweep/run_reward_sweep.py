@@ -185,6 +185,13 @@ def _finite_series(values: list[Any]) -> tuple[np.ndarray, np.ndarray]:
     return steps[np.isfinite(series)], series[np.isfinite(series)]
 
 
+def _save_figure(fig: plt.Figure, path: Path) -> None:
+    path = path.with_suffix(".pdf")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path, dpi=180, bbox_inches="tight")
+    plt.close(fig)
+
+
 def _plot_metric(
     fixed_history: dict[str, Any],
     reward_histories: dict[str, dict[str, Any]],
@@ -209,9 +216,7 @@ def _plot_metric(
     plt.ylabel(ylabel)
     plt.grid(True, which="both", ls="--", alpha=0.3)
     plt.legend(fontsize=8)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(path, dpi=180, bbox_inches="tight")
-    plt.close(fig)
+    _save_figure(fig, path)
 
 
 def _plot_agent_rewards(
@@ -229,9 +234,7 @@ def _plot_agent_rewards(
     plt.ylabel("agent reward")
     plt.grid(True, ls="--", alpha=0.3)
     plt.legend(fontsize=8)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(path, dpi=180, bbox_inches="tight")
-    plt.close(fig)
+    _save_figure(fig, path)
 
 
 def _plot_agent_sigmas(
@@ -253,9 +256,7 @@ def _plot_agent_sigmas(
     plt.ylabel("sigma")
     plt.grid(True, ls="--", alpha=0.3)
     plt.legend(fontsize=8)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(path, dpi=180, bbox_inches="tight")
-    plt.close(fig)
+    _save_figure(fig, path)
 
 
 def _plot_weights(
@@ -276,9 +277,7 @@ def _plot_weights(
         axis.grid(True, ls="--", alpha=0.3)
     axes[0].set_ylabel("weight")
     axes[0].legend(fontsize=7)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(path, dpi=180, bbox_inches="tight")
-    plt.close(fig)
+    _save_figure(fig, path)
 
 
 def _reference_grid(spec: EquationSpec) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
@@ -371,9 +370,7 @@ def _plot_solution_slices(
     for axis in axes_flat[len(valid_times) :]:
         axis.axis("off")
     axes_flat[0].legend(fontsize=7)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(path, dpi=180, bbox_inches="tight")
-    plt.close(fig)
+    _save_figure(fig, path)
 
 
 def _last_finite(values: list[Any]) -> float | None:
@@ -398,7 +395,7 @@ def _save_sweep_plots(
         reward_histories,
         "equal_weight_total",
         "equal-weight loss",
-        plot_dir / "reward_sweep_equal_loss.png",
+        plot_dir / "reward_sweep_equal_loss.pdf",
         log_y=True,
     )
     _plot_metric(
@@ -406,19 +403,19 @@ def _save_sweep_plots(
         reward_histories,
         "relative_l2",
         "relative L2 error",
-        plot_dir / "reward_sweep_relative_l2.png",
+        plot_dir / "reward_sweep_relative_l2.pdf",
         log_y=True,
     )
-    _plot_agent_rewards(reward_histories, plot_dir / "reward_sweep_agent_reward.png")
-    _plot_agent_sigmas(reward_histories, plot_dir / "reward_sweep_agent_sigma.png")
-    _plot_weights(reward_histories, plot_dir / "reward_sweep_weights.png")
+    _plot_agent_rewards(reward_histories, plot_dir / "reward_sweep_agent_reward.pdf")
+    _plot_agent_sigmas(reward_histories, plot_dir / "reward_sweep_agent_sigma.pdf")
+    _plot_weights(reward_histories, plot_dir / "reward_sweep_weights.pdf")
     _plot_solution_slices(
         fixed_result.model,
         reward_results,
         spec,
         device,
         cfg.solution_slice_times,
-        plot_dir / "reward_sweep_solution_slices.png",
+        plot_dir / "reward_sweep_solution_slices.pdf",
     )
 
 
