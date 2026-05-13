@@ -8,9 +8,6 @@ from .tiny import LinearRLPolicy, TinyLossWeightAgent
 
 AGENT_REGISTRY = {
     "tiny_loss_weight": TinyLossWeightAgent,
-    "tiny": TinyLossWeightAgent,
-    "tiny_rl": TinyLossWeightAgent,
-    "linear_rl": TinyLossWeightAgent,
 }
 AGENT_NAMES = frozenset(AGENT_REGISTRY)
 

@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 
-AGENT_CONTROLLER_NAMES = {"tiny_loss_weight", "tiny", "tiny_rl", "linear_rl"}
+AGENT_CONTROLLER_NAMES = {"tiny_loss_weight"}
 
 
 @dataclass
