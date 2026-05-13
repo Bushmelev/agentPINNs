@@ -27,6 +27,6 @@ def set_seed(seed: int) -> None:
 
 def configure_torch() -> None:
     try:
-        torch.set_float32_matmul_precision("high")
+        torch.set_float32_matmul_precision("highest")
     except Exception:
         pass

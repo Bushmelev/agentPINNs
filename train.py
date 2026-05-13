@@ -59,8 +59,8 @@ def main() -> None:
         from pinn_accel.experiment import run_experiment
     except ModuleNotFoundError as exc:
         raise SystemExit(
-            "Missing runtime dependency. Run: python3 -m venv .venv && "
-            ".venv/bin/pip install -e ."
+            f"Missing runtime dependency: {exc.name!r}. "
+            "Run: python3 -m venv .venv && .venv/bin/pip install -e ."
         ) from exc
 
     run_dir = run_experiment(cfg)
