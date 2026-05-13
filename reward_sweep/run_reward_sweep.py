@@ -101,6 +101,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--adam-steps", type=int, help="Adam phase steps.")
     parser.add_argument("--lbfgs-steps", type=int, help="L-BFGS phase steps.")
+    parser.add_argument("--lbfgs-max-iter", type=int, help="L-BFGS max_iter per step.")
     parser.add_argument("--device", help="auto, cpu, cuda, cuda:0, mps.")
     parser.add_argument("--seed", type=int, help="Random seed.")
     parser.add_argument("--no-plots", dest="save_plots", action="store_false")
@@ -141,6 +142,8 @@ def _apply_overrides(cfg: ExperimentConfig, args: argparse.Namespace) -> Experim
         data["training"]["adam_steps"] = args.adam_steps
     if args.lbfgs_steps is not None:
         data["training"]["lbfgs_steps"] = args.lbfgs_steps
+    if args.lbfgs_max_iter is not None:
+        data["training"]["lbfgs_max_iter"] = args.lbfgs_max_iter
     if args.device is not None:
         data["device"] = args.device
     if args.seed is not None:

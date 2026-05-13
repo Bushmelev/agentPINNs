@@ -100,6 +100,7 @@ class ExperimentConfig:
         optimizer_mode: str | None = None,
         adam_steps: int | None = None,
         lbfgs_steps: int | None = None,
+        lbfgs_max_iter: int | None = None,
         compile_model: bool = False,
         save_plots: bool | None = None,
     ) -> "ExperimentConfig":
@@ -126,6 +127,8 @@ class ExperimentConfig:
             data["training"]["adam_steps"] = adam_steps
         if lbfgs_steps is not None:
             data["training"]["lbfgs_steps"] = lbfgs_steps
+        if lbfgs_max_iter is not None:
+            data["training"]["lbfgs_max_iter"] = lbfgs_max_iter
         if compile_model:
             data["training"]["compile_model"] = True
         if reward is not None:
