@@ -68,6 +68,7 @@ def _empty_history(component_names: list[str], controller_name: str) -> dict[str
         "agent_reward": [],
         "agent_sigma": [],
         "agent_frozen": [],
+        "lbfgs_closure_calls": [],
     }
 
 
@@ -296,6 +297,7 @@ def train_one(
     for phase in phases:
         for _ in range(phase.steps):
             step += 1
+            lbfgs_closure_calls = None
             weights_frozen = _weights_frozen_in_phase(
                 phase.name,
                 train_cfg,
@@ -327,7 +329,11 @@ def train_one(
                 )
                 del objective, loss_pack, weights_t
 
+                lbfgs_closure_calls = 0
+
                 def closure() -> torch.Tensor:
+                    nonlocal lbfgs_closure_calls
+                    lbfgs_closure_calls += 1
                     phase.optimizer.zero_grad(set_to_none=True)
                     closure_pack = loss_evaluator.compute(train_model, batches)
                     if weights_frozen:
@@ -347,6 +353,26 @@ def train_one(
                     return closure_objective
 
                 phase.optimizer.step(closure)
+                loss_pack = loss_evaluator.compute(train_model, batches)
+                if weights_frozen:
+                    objective, weights_t = controller.frozen_objective(
+                        loss_pack.values,
+                        model,
+                        step,
+                    )
+                else:
+                    objective, weights_t = controller.objective(
+                        loss_pack.values,
+                        model,
+                        step,
+                        update_state=False,
+                    )
+                raw_losses, weights_np, equal_total, weighted_total = _history_values(
+                    loss_pack,
+                    component_names,
+                    weights_t,
+                )
+                del objective, loss_pack, weights_t
             else:
                 phase.optimizer.zero_grad(set_to_none=True)
                 loss_pack = loss_evaluator.compute(train_model, batches)
@@ -402,6 +428,7 @@ def train_one(
             history["agent_reward"].append(extras.get("agent_reward"))
             history["agent_sigma"].append(extras.get("agent_sigma"))
             history["agent_frozen"].append(agent_frozen)
+            history["lbfgs_closure_calls"].append(lbfgs_closure_calls)
 
             if train_cfg.log_every > 0 and step % train_cfg.log_every == 0:
                 pieces = " ".join(
