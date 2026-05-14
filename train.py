@@ -27,6 +27,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--adam-steps", type=int, help="Adam phase steps.")
     parser.add_argument("--lbfgs-steps", type=int, help="L-BFGS phase steps.")
     parser.add_argument("--lbfgs-max-iter", type=int, help="L-BFGS max_iter per step.")
+    parser.add_argument(
+        "--agent-update-interval",
+        type=int,
+        help="Agent update interval in active training steps.",
+    )
+    parser.add_argument(
+        "--agent-warmup-steps",
+        type=int,
+        help="Number of active agent steps before agent updates start.",
+    )
     parser.add_argument("--device", help="auto, cpu, cuda, cuda:0, mps.")
     parser.add_argument("--seed", type=int, help="Random seed.")
     parser.add_argument("--out", dest="output_dir", help="Artifacts directory.")
@@ -52,6 +62,8 @@ def main() -> None:
         adam_steps=args.adam_steps,
         lbfgs_steps=args.lbfgs_steps,
         lbfgs_max_iter=args.lbfgs_max_iter,
+        agent_update_interval=args.agent_update_interval,
+        agent_warmup_steps=args.agent_warmup_steps,
         compile_model=args.compile_model,
         save_plots=args.save_plots,
     )

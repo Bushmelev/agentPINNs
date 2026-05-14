@@ -101,6 +101,8 @@ class ExperimentConfig:
         adam_steps: int | None = None,
         lbfgs_steps: int | None = None,
         lbfgs_max_iter: int | None = None,
+        agent_update_interval: int | None = None,
+        agent_warmup_steps: int | None = None,
         compile_model: bool = False,
         save_plots: bool | None = None,
     ) -> "ExperimentConfig":
@@ -129,6 +131,10 @@ class ExperimentConfig:
             data["training"]["lbfgs_steps"] = lbfgs_steps
         if lbfgs_max_iter is not None:
             data["training"]["lbfgs_max_iter"] = lbfgs_max_iter
+        if agent_update_interval is not None:
+            data["training"]["agent_update_interval"] = agent_update_interval
+        if agent_warmup_steps is not None:
+            data["training"]["agent_warmup_steps"] = agent_warmup_steps
         if compile_model:
             data["training"]["compile_model"] = True
         if reward is not None:
