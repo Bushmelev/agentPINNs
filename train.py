@@ -28,6 +28,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lbfgs-steps", type=int, help="L-BFGS phase steps.")
     parser.add_argument("--lbfgs-max-iter", type=int, help="L-BFGS max_iter per step.")
     parser.add_argument(
+        "--lbfgs-weight-mode",
+        choices=["controller", "equal"],
+        help="L-BFGS loss weights: controller uses final controller weights; equal uses uniform weights.",
+    )
+    parser.add_argument(
         "--agent-update-interval",
         type=int,
         help="Agent update interval in active training steps.",
@@ -62,6 +67,7 @@ def main() -> None:
         adam_steps=args.adam_steps,
         lbfgs_steps=args.lbfgs_steps,
         lbfgs_max_iter=args.lbfgs_max_iter,
+        lbfgs_weight_mode=args.lbfgs_weight_mode,
         agent_update_interval=args.agent_update_interval,
         agent_warmup_steps=args.agent_warmup_steps,
         compile_model=args.compile_model,

@@ -38,6 +38,7 @@ class TrainingConfig:
     lbfgs_tolerance_grad: float = 1e-7
     lbfgs_tolerance_change: float = 1e-9
     lbfgs_line_search_fn: str | None = "strong_wolfe"
+    lbfgs_weight_mode: str = "controller"
     log_every: int = 100
     relative_l2_every: int = 1
     relative_l2_chunk_size: int = 65536
@@ -101,6 +102,7 @@ class ExperimentConfig:
         adam_steps: int | None = None,
         lbfgs_steps: int | None = None,
         lbfgs_max_iter: int | None = None,
+        lbfgs_weight_mode: str | None = None,
         agent_update_interval: int | None = None,
         agent_warmup_steps: int | None = None,
         compile_model: bool = False,
@@ -131,6 +133,8 @@ class ExperimentConfig:
             data["training"]["lbfgs_steps"] = lbfgs_steps
         if lbfgs_max_iter is not None:
             data["training"]["lbfgs_max_iter"] = lbfgs_max_iter
+        if lbfgs_weight_mode is not None:
+            data["training"]["lbfgs_weight_mode"] = lbfgs_weight_mode
         if agent_update_interval is not None:
             data["training"]["agent_update_interval"] = agent_update_interval
         if agent_warmup_steps is not None:

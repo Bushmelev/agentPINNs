@@ -103,6 +103,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lbfgs-steps", type=int, help="L-BFGS phase steps.")
     parser.add_argument("--lbfgs-max-iter", type=int, help="L-BFGS max_iter per step.")
     parser.add_argument(
+        "--lbfgs-weight-mode",
+        choices=["controller", "equal"],
+        help="L-BFGS loss weights: controller uses final controller weights; equal uses uniform weights.",
+    )
+    parser.add_argument(
         "--agent-update-interval",
         type=int,
         help="Agent update interval in active training steps.",
@@ -154,6 +159,8 @@ def _apply_overrides(cfg: ExperimentConfig, args: argparse.Namespace) -> Experim
         data["training"]["lbfgs_steps"] = args.lbfgs_steps
     if args.lbfgs_max_iter is not None:
         data["training"]["lbfgs_max_iter"] = args.lbfgs_max_iter
+    if args.lbfgs_weight_mode is not None:
+        data["training"]["lbfgs_weight_mode"] = args.lbfgs_weight_mode
     if args.agent_update_interval is not None:
         data["training"]["agent_update_interval"] = args.agent_update_interval
     if args.agent_warmup_steps is not None:

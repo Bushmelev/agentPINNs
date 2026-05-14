@@ -179,9 +179,27 @@ def _weights_frozen_in_phase(
 ) -> bool:
     if phase_name != "lbfgs":
         return False
+    if _lbfgs_weight_mode(train_cfg) == "equal":
+        return True
     if train_cfg.freeze_weights_during_lbfgs and controller.name != "fixed":
         return True
     return train_cfg.freeze_agent_during_lbfgs and controller.uses_agent
+
+
+def _lbfgs_weight_mode(train_cfg: TrainingConfig) -> str:
+    value = train_cfg.lbfgs_weight_mode.lower().replace("-", "_")
+    aliases = {
+        "controller": "controller",
+        "learned": "controller",
+        "agent": "controller",
+        "equal": "equal",
+        "uniform": "equal",
+        "fixed": "equal",
+    }
+    value = aliases.get(value, value)
+    if value not in {"controller", "equal"}:
+        raise ValueError("training.lbfgs_weight_mode must be 'controller' or 'equal'")
+    return value
 
 
 def _agent_active_in_phase(
@@ -239,6 +257,28 @@ def _history_values(
     equal_total = float(np.mean(raw_losses))
     weighted_total = float(np.sum(weights_np * raw_losses))
     return raw_losses, weights_np, equal_total, weighted_total
+
+
+def _equal_weight_objective(losses: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    weights = torch.full_like(losses, 1.0 / max(int(losses.numel()), 1))
+    return torch.sum(weights * losses), weights.detach()
+
+
+def _lbfgs_objective(
+    *,
+    losses: torch.Tensor,
+    model: nn.Module,
+    step: int,
+    train_cfg: TrainingConfig,
+    controller: WeightController,
+    weights_frozen: bool,
+    update_state: bool,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    if _lbfgs_weight_mode(train_cfg) == "equal":
+        return _equal_weight_objective(losses)
+    if weights_frozen:
+        return controller.frozen_objective(losses, model, step)
+    return controller.objective(losses, model, step, update_state=update_state)
 
 
 def train_one(
@@ -309,19 +349,15 @@ def train_one(
             batches = loss_evaluator.draw_batches()
             if phase.name == "lbfgs":
                 loss_pack = loss_evaluator.compute(train_model, batches)
-                if weights_frozen:
-                    objective, weights_t = controller.frozen_objective(
-                        loss_pack.values,
-                        model,
-                        step,
-                    )
-                else:
-                    objective, weights_t = controller.objective(
-                        loss_pack.values,
-                        model,
-                        step,
-                        update_state=True,
-                    )
+                objective, weights_t = _lbfgs_objective(
+                    losses=loss_pack.values,
+                    model=model,
+                    step=step,
+                    train_cfg=train_cfg,
+                    controller=controller,
+                    weights_frozen=weights_frozen,
+                    update_state=True,
+                )
                 raw_losses, weights_np, equal_total, weighted_total = _history_values(
                     loss_pack,
                     component_names,
@@ -336,37 +372,29 @@ def train_one(
                     lbfgs_closure_calls += 1
                     phase.optimizer.zero_grad(set_to_none=True)
                     closure_pack = loss_evaluator.compute(train_model, batches)
-                    if weights_frozen:
-                        closure_objective, _ = controller.frozen_objective(
-                            closure_pack.values,
-                            model,
-                            step,
-                        )
-                    else:
-                        closure_objective, _ = controller.objective(
-                            closure_pack.values,
-                            model,
-                            step,
-                            update_state=False,
-                        )
+                    closure_objective, _ = _lbfgs_objective(
+                        losses=closure_pack.values,
+                        model=model,
+                        step=step,
+                        train_cfg=train_cfg,
+                        controller=controller,
+                        weights_frozen=weights_frozen,
+                        update_state=False,
+                    )
                     closure_objective.backward()
                     return closure_objective
 
                 phase.optimizer.step(closure)
                 loss_pack = loss_evaluator.compute(train_model, batches)
-                if weights_frozen:
-                    objective, weights_t = controller.frozen_objective(
-                        loss_pack.values,
-                        model,
-                        step,
-                    )
-                else:
-                    objective, weights_t = controller.objective(
-                        loss_pack.values,
-                        model,
-                        step,
-                        update_state=False,
-                    )
+                objective, weights_t = _lbfgs_objective(
+                    losses=loss_pack.values,
+                    model=model,
+                    step=step,
+                    train_cfg=train_cfg,
+                    controller=controller,
+                    weights_frozen=weights_frozen,
+                    update_state=False,
+                )
                 raw_losses, weights_np, equal_total, weighted_total = _history_values(
                     loss_pack,
                     component_names,
