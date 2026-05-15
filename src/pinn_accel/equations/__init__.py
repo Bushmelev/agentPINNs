@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from .base import ConstraintSpec, EquationSpec, SampleBatch
+from .advection import build_advection
 from .burgers import build_burgers
 from .heat import build_heat
 
@@ -10,6 +11,7 @@ from .heat import build_heat
 EquationBuilder = Callable[..., EquationSpec]
 
 EQUATION_REGISTRY: dict[str, EquationBuilder] = {
+    "advection": build_advection,
     "burgers": build_burgers,
     "heat": build_heat,
 }
@@ -28,5 +30,6 @@ __all__ = [
     "EquationSpec",
     "SampleBatch",
     "EQUATION_REGISTRY",
+    "build_advection",
     "get_equation",
 ]

@@ -105,6 +105,7 @@ class ExperimentConfig:
         lbfgs_weight_mode: str | None = None,
         agent_update_interval: int | None = None,
         agent_warmup_steps: int | None = None,
+        frozen_agent_checkpoint: str | None = None,
         compile_model: bool = False,
         save_plots: bool | None = None,
     ) -> "ExperimentConfig":
@@ -139,6 +140,15 @@ class ExperimentConfig:
             data["training"]["agent_update_interval"] = agent_update_interval
         if agent_warmup_steps is not None:
             data["training"]["agent_warmup_steps"] = agent_warmup_steps
+        if frozen_agent_checkpoint is not None:
+            params = dict(data.get("controller_params", {}))
+            for controller in data["controllers"]:
+                if controller.lower() in AGENT_CONTROLLER_NAMES:
+                    controller_cfg = dict(params.get(controller, {}))
+                    controller_cfg["frozen_agent_checkpoint"] = frozen_agent_checkpoint
+                    controller_cfg["trainable"] = False
+                    params[controller] = controller_cfg
+            data["controller_params"] = params
         if compile_model:
             data["training"]["compile_model"] = True
         if reward is not None:

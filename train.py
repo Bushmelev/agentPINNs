@@ -42,6 +42,10 @@ def parse_args() -> argparse.Namespace:
         type=int,
         help="Number of active agent steps before agent updates start.",
     )
+    parser.add_argument(
+        "--frozen-agent-checkpoint",
+        help="Load this agent checkpoint as a frozen deterministic policy.",
+    )
     parser.add_argument("--device", help="auto, cpu, cuda, cuda:0, mps.")
     parser.add_argument("--seed", type=int, help="Random seed.")
     parser.add_argument("--out", dest="output_dir", help="Artifacts directory.")
@@ -70,6 +74,7 @@ def main() -> None:
         lbfgs_weight_mode=args.lbfgs_weight_mode,
         agent_update_interval=args.agent_update_interval,
         agent_warmup_steps=args.agent_warmup_steps,
+        frozen_agent_checkpoint=args.frozen_agent_checkpoint,
         compile_model=args.compile_model,
         save_plots=args.save_plots,
     )

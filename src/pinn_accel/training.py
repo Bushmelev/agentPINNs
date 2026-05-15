@@ -436,9 +436,18 @@ def train_one(
                 agent_progress=agent_progress,
                 done=step == total_steps,
             )
-            agent_frozen = not agent_active
+            agent_frozen = (
+                controller.uses_agent
+                and (
+                    not agent_active
+                    or not getattr(getattr(controller, "agent", None), "trainable", True)
+                )
+            )
             if agent_frozen:
-                extras = controller.frozen_step_extras()
+                if agent_active:
+                    extras = controller.after_step(snapshot, baseline_history)
+                else:
+                    extras = controller.frozen_step_extras()
             else:
                 extras = controller.after_step(snapshot, baseline_history)
 

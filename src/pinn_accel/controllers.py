@@ -8,6 +8,7 @@ import torch
 import torch.nn as nn
 
 from .agents import AGENT_NAMES, BaseWeightAgent, make_agent
+from .checkpoints import agent_init_kwargs_from_checkpoint, load_agent_checkpoint_payload
 from .rewards import Reward, RewardContext, make_reward
 
 
@@ -309,12 +310,16 @@ class AgentWeightController(WeightController):
         reward: Reward,
         update_interval: int,
         warmup_steps: int = 0,
+        agent_checkpoint: dict[str, Any] | None = None,
+        freeze_loaded_agent: bool = False,
     ):
         super().__init__()
         self.agent = agent
         self.reward = reward
         self.update_interval = int(update_interval)
         self.warmup_steps = int(warmup_steps)
+        self._agent_checkpoint = agent_checkpoint
+        self._freeze_loaded_agent = bool(freeze_loaded_agent)
         self._weights_np: np.ndarray | None = None
         self._initial_snapshot: StepSnapshot | None = None
         self._previous_state: np.ndarray | None = None
@@ -324,7 +329,10 @@ class AgentWeightController(WeightController):
 
     @property
     def requires_baseline(self) -> bool:
-        return self.reward.requires_baseline
+        return (
+            bool(getattr(self.agent, "trainable", True))
+            and self.reward.requires_baseline
+        )
 
     def bind(
         self,
@@ -335,7 +343,56 @@ class AgentWeightController(WeightController):
         super().bind(component_names, initial_weights, device)
         self._weights_np = normalize_weights(initial_weights)
         self.agent.bind(component_names, device)
+        if self._agent_checkpoint is not None:
+            self._load_agent_checkpoint(device)
         self.agent.set_weight_reference(self._weights_np)
+
+    def _load_agent_checkpoint(self, device: torch.device) -> None:
+        if self._agent_checkpoint is None:
+            return
+        expected_components = self._agent_checkpoint.get("component_names")
+        if (
+            expected_components is not None
+            and list(expected_components) != self.component_names
+        ):
+            raise ValueError(
+                "Frozen agent checkpoint component order does not match current equation: "
+                f"{list(expected_components)} != {self.component_names}"
+            )
+        expected_action_dim = self._agent_checkpoint.get("action_dim")
+        if (
+            expected_action_dim is not None
+            and int(expected_action_dim) != self.agent.action_dim
+        ):
+            raise ValueError(
+                "Frozen agent checkpoint action_dim does not match current equation: "
+                f"{expected_action_dim} != {self.agent.action_dim}"
+            )
+        expected_state_dim = self._agent_checkpoint.get("state_dim")
+        if expected_state_dim is not None and int(expected_state_dim) != self.agent.state_dim():
+            raise ValueError(
+                "Frozen agent checkpoint state_dim does not match current agent config: "
+                f"{expected_state_dim} != {self.agent.state_dim()}"
+            )
+
+        policy_state = self._agent_checkpoint.get("policy_state_dict")
+        if policy_state is not None:
+            policy = getattr(self.agent, "policy", None)
+            if policy is None:
+                raise RuntimeError("Agent policy is not initialized")
+            policy.load_state_dict(policy_state)
+        else:
+            agent_state = self._agent_checkpoint.get("agent_state_dict")
+            if agent_state is None:
+                raise ValueError("Frozen agent checkpoint has no policy_state_dict")
+            self.agent.load_state_dict(agent_state)
+
+        self.agent.to(device)
+        if self._freeze_loaded_agent:
+            self.agent.trainable = False
+            self.agent.eval()
+            for param in self.agent.parameters():
+                param.requires_grad_(False)
 
     def objective(
         self,
@@ -381,7 +438,8 @@ class AgentWeightController(WeightController):
         )
         reward_value = None
         if (
-            self._previous_state is not None
+            getattr(self.agent, "trainable", True)
+            and self._previous_state is not None
             and self._previous_action is not None
             and self._previous_snapshot is not None
         ):
@@ -521,6 +579,19 @@ def make_controller(
     if value in AGENT_NAMES:
         reward_name = str(cfg.pop("reward", "log_ratio"))
         reward_params = dict(cfg.pop("reward_params", {}))
+        frozen_agent_checkpoint = cfg.pop("frozen_agent_checkpoint", None)
+        agent_checkpoint = cfg.pop("agent_checkpoint", None)
+        freeze_loaded_agent = bool(cfg.pop("freeze_loaded_agent", False))
+        checkpoint_payload = None
+        if frozen_agent_checkpoint is not None:
+            agent_checkpoint = frozen_agent_checkpoint
+            freeze_loaded_agent = True
+        if agent_checkpoint is not None:
+            checkpoint_payload = load_agent_checkpoint_payload(agent_checkpoint)
+            checkpoint_kwargs = agent_init_kwargs_from_checkpoint(checkpoint_payload)
+            cfg.update(checkpoint_kwargs)
+            if freeze_loaded_agent:
+                cfg["trainable"] = False
         reward = make_reward(reward_name, reward_params)
         agent = make_agent(value, cfg)
         return AgentWeightController(
@@ -528,12 +599,19 @@ def make_controller(
             reward,
             update_interval=update_interval,
             warmup_steps=warmup_steps,
+            agent_checkpoint=checkpoint_payload,
+            freeze_loaded_agent=freeze_loaded_agent,
         )
     raise ValueError(f"Unknown controller: {name}")
 
 
 def controller_needs_baseline(name: str, params: dict[str, Any]) -> bool:
     if name.lower() not in AGENT_NAMES:
+        return False
+    if (
+        params.get("frozen_agent_checkpoint") is not None
+        or params.get("trainable") is False
+    ):
         return False
     reward_name = str(params.get("reward", "log_ratio"))
     reward = make_reward(reward_name, params.get("reward_params", {}))

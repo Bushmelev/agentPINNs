@@ -99,7 +99,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--formats",
-        default="pdf,png",
+        default="pdf",
         help="Comma-separated output formats, e.g. pdf,png.",
     )
     parser.add_argument(

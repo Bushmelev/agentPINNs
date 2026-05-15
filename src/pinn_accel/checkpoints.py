@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import asdict, is_dataclass
+from pathlib import Path
 from typing import Any
+
+import torch
 
 
 def config_to_dict(value: Any) -> Any:
@@ -83,6 +86,85 @@ def build_agent_checkpoint(controller: Any) -> dict[str, Any] | None:
     if optimizer is not None:
         payload["optimizer_state_dict"] = optimizer.state_dict()
     return payload
+
+
+def load_checkpoint_payload(
+    path: str | Path,
+    *,
+    map_location: str | torch.device = "cpu",
+) -> dict[str, Any]:
+    checkpoint_path = Path(path)
+    if not checkpoint_path.is_file():
+        raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
+    try:
+        payload = torch.load(
+            checkpoint_path,
+            map_location=map_location,
+            weights_only=True,
+        )
+    except TypeError:
+        payload = torch.load(checkpoint_path, map_location=map_location)
+    if not isinstance(payload, dict):
+        raise ValueError(f"Checkpoint payload must be a dict: {checkpoint_path}")
+    return payload
+
+
+def extract_agent_checkpoint(payload: dict[str, Any]) -> dict[str, Any]:
+    agent_payload = payload.get("agent")
+    if isinstance(agent_payload, dict):
+        return agent_payload
+    if "policy_state_dict" in payload or "agent_state_dict" in payload:
+        return payload
+    raise ValueError("Checkpoint does not contain an agent payload")
+
+
+def load_agent_checkpoint_payload(
+    path: str | Path,
+    *,
+    map_location: str | torch.device = "cpu",
+) -> dict[str, Any]:
+    return extract_agent_checkpoint(
+        load_checkpoint_payload(path, map_location=map_location)
+    )
+
+
+def agent_init_kwargs_from_checkpoint(payload: dict[str, Any]) -> dict[str, Any]:
+    kwargs: dict[str, Any] = {}
+    state_features = payload.get("state_features", {})
+    if isinstance(state_features, dict):
+        for key in (
+            "include_log_losses",
+            "include_initial_loss_ratios",
+            "feature_clip",
+        ):
+            if key in state_features and state_features[key] is not None:
+                kwargs[key] = state_features[key]
+
+    action_transform = payload.get("action_transform", {})
+    if isinstance(action_transform, dict):
+        for key in (
+            "action_scale",
+            "min_weight",
+            "min_weight_share",
+            "max_weight_share",
+        ):
+            if key in action_transform and action_transform[key] is not None:
+                kwargs[key] = action_transform[key]
+
+    policy_config = payload.get("policy_config", {})
+    if isinstance(policy_config, dict):
+        for key in (
+            "policy_bias",
+            "policy_hidden_dim",
+            "sigma",
+            "learn_sigma",
+            "sigma_min",
+            "sigma_max",
+            "zero_init_policy",
+        ):
+            if key in policy_config:
+                kwargs[key] = policy_config[key]
+    return kwargs
 
 
 def build_result_checkpoint(
