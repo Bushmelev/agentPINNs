@@ -19,6 +19,9 @@ DETAIL_COLUMNS = [
     "agent_update_interval",
     "adam_steps",
     "lbfgs_steps",
+    "rank_pre_relative_l2",
+    "rank_post_relative_l2",
+    "rank_post_equal_loss",
     "pre_relative_l2",
     "post_relative_l2",
     "pre_l2_vs_fixed_pct",
@@ -50,6 +53,21 @@ SUMMARY_COLUMNS = [
     "mean_post_l2_vs_fixed_pct",
     "median_post_l2_vs_fixed_pct",
     "win_rate_post_l2_vs_fixed",
+    "mean_rank_post_relative_l2",
+    "median_rank_post_relative_l2",
+    "std_rank_post_relative_l2",
+    "best_rank_post_relative_l2",
+    "worst_rank_post_relative_l2",
+    "mean_rank_pre_relative_l2",
+    "median_rank_pre_relative_l2",
+    "std_rank_pre_relative_l2",
+    "best_rank_pre_relative_l2",
+    "worst_rank_pre_relative_l2",
+    "mean_rank_post_equal_loss",
+    "median_rank_post_equal_loss",
+    "std_rank_post_equal_loss",
+    "best_rank_post_equal_loss",
+    "worst_rank_post_equal_loss",
     "mean_lbfgs_relative_l2_improvement_pct",
     "median_lbfgs_relative_l2_improvement_pct",
     "mean_pre_equal_loss",
@@ -72,6 +90,8 @@ MARKDOWN_COLUMNS = [
     "median_post_relative_l2",
     "mean_post_l2_vs_fixed_pct",
     "win_rate_post_l2_vs_fixed",
+    "median_rank_post_relative_l2",
+    "worst_rank_post_relative_l2",
     "median_pre_relative_l2",
     "mean_pre_l2_vs_fixed_pct",
     "win_rate_pre_l2_vs_fixed",
@@ -363,6 +383,21 @@ def collect_equation_rows(
     return rows
 
 
+def add_run_ranks(rows: list[dict[str, Any]]) -> None:
+    rank_specs = [
+        ("pre_relative_l2", "rank_pre_relative_l2"),
+        ("post_relative_l2", "rank_post_relative_l2"),
+        ("post_equal_loss", "rank_post_equal_loss"),
+    ]
+    for metric, rank_key in rank_specs:
+        ranked = sorted(
+            [row for row in rows if as_float(row.get(metric)) is not None],
+            key=lambda row: (float(row[metric]), row["reward"]),
+        )
+        for rank, row in enumerate(ranked, start=1):
+            row[rank_key] = rank
+
+
 def filtered_rows(rows: list[dict[str, Any]], rewards: str | None) -> list[dict[str, Any]]:
     if not rewards:
         return rows
@@ -392,6 +427,14 @@ def std(values: list[float]) -> float | None:
         return 0.0 if values else None
     avg = sum(values) / len(values)
     return math.sqrt(sum((value - avg) ** 2 for value in values) / (len(values) - 1))
+
+
+def best(values: list[float]) -> float | None:
+    return None if not values else min(values)
+
+
+def worst(values: list[float]) -> float | None:
+    return None if not values else max(values)
 
 
 def np_median(values: list[float]) -> float:
@@ -438,6 +481,9 @@ def summarize(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "post_relative_l2",
             "pre_l2_vs_fixed_pct",
             "post_l2_vs_fixed_pct",
+            "rank_pre_relative_l2",
+            "rank_post_relative_l2",
+            "rank_post_equal_loss",
             "lbfgs_relative_l2_improvement_pct",
             "pre_equal_loss",
             "post_equal_loss",
@@ -449,6 +495,14 @@ def summarize(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             summary[f"median_{key}"] = median(values)
             if key in {"pre_relative_l2", "post_relative_l2"}:
                 summary[f"std_{key}"] = std(values)
+            if key in {
+                "rank_pre_relative_l2",
+                "rank_post_relative_l2",
+                "rank_post_equal_loss",
+            }:
+                summary[f"std_{key}"] = std(values)
+                summary[f"best_{key}"] = best(values)
+                summary[f"worst_{key}"] = worst(values)
         summary["win_rate_pre_l2_vs_fixed"] = win_rate(group, "pre_l2_vs_fixed_pct")
         summary["win_rate_post_l2_vs_fixed"] = win_rate(group, "post_l2_vs_fixed_pct")
         summary["win_rate_post_equal_vs_fixed"] = win_rate(group, "post_equal_vs_fixed_pct")
@@ -526,14 +580,14 @@ def main() -> None:
     for sweep_root in sweep_roots:
         cfg = run_config(sweep_root)
         for equation_root in equation_roots(sweep_root, args.equation):
-            all_rows.extend(
-                collect_equation_rows(
-                    sweep_root=sweep_root,
-                    equation_root=equation_root,
-                    cfg=cfg,
-                    pre_index=args.pre_index,
-                )
+            equation_rows = collect_equation_rows(
+                sweep_root=sweep_root,
+                equation_root=equation_root,
+                cfg=cfg,
+                pre_index=args.pre_index,
             )
+            add_run_ranks(equation_rows)
+            all_rows.extend(equation_rows)
 
     all_rows = filtered_rows(all_rows, args.rewards)
     if not all_rows:
