@@ -15,36 +15,25 @@ def build_advection(
     sample_id: int = 0,
     target_time: float | None = None,
     time_tolerance: float = 1e-10,
+    x_coordinate_type: str = "auto",
 ) -> EquationSpec:
     if data_path is None:
         raise ValueError("advection requires equation_params.data_path")
-    return build_advection_hdf5(
-        data_path=data_path,
-        sample_id=sample_id,
-        target_time=target_time,
-        time_tolerance=time_tolerance,
-        beta=beta,
-    )
-
-
-def build_advection_hdf5(
-    *,
-    data_path: str,
-    sample_id: int = 0,
-    target_time: float | None = None,
-    time_tolerance: float = 1e-10,
-    beta: float = 1.0,
-) -> EquationSpec:
     data = _load_advection_hdf5(data_path, sample_id)
-    x = data["x"]
+    x_raw = data["x"]
     t = data["t"]
     z = data["z"]
+    x, x_left_edge, x_right_edge, resolved_x_type = _resolve_spatial_grid(
+        x_raw,
+        z.shape[1],
+        x_coordinate_type,
+    )
     ic_index = _resolve_time_index(
         t,
         t[0] if target_time is None else target_time,
         time_tolerance,
     )
-    pde_x = x[1:-1]
+    pde_x = x
     pde_t = t[1:]
     bc_t = t[1:]
     if pde_x.size == 0 or pde_t.size == 0:
@@ -87,8 +76,14 @@ def build_advection_hdf5(
     ) -> SampleBatch:
         del n, spec, generator
         t_t = _column_tensor(bc_t, device)
-        x_left = _column_tensor(np.full_like(bc_t, x[0], dtype=np.float64), device)
-        x_right = _column_tensor(np.full_like(bc_t, x[-1], dtype=np.float64), device)
+        x_left = _column_tensor(
+            np.full_like(bc_t, x_left_edge, dtype=np.float64),
+            device,
+        )
+        x_right = _column_tensor(
+            np.full_like(bc_t, x_right_edge, dtype=np.float64),
+            device,
+        )
         left_xt = torch.cat([x_left, t_t], dim=1)
         right_xt = torch.cat([x_right, t_t], dim=1)
         return SampleBatch(xt=left_xt, x=x_left, t=t_t, aux=right_xt)
@@ -121,8 +116,8 @@ def build_advection_hdf5(
 
     return EquationSpec(
         name="advection",
-        x_min=float(x[0]),
-        x_max=float(x[-1]),
+        x_min=x_left_edge,
+        x_max=x_right_edge,
         t_min=float(t[0]),
         t_max=float(t[-1]),
         residual_fn=residual,
@@ -136,6 +131,7 @@ def build_advection_hdf5(
             "data_path": str(Path(data_path)),
             "sample_id": int(sample_id),
             "target_time": float(t[ic_index]),
+            "x_coordinate_type": resolved_x_type,
         },
         default_batch_sizes={
             "pde": int(pde_x.size * pde_t.size),
@@ -150,6 +146,9 @@ def build_advection_hdf5(
             "tensor_shape": list(z.shape),
             "x_points": int(x.size),
             "t_points": int(t.size),
+            "x_coordinate_type": resolved_x_type,
+            "x_left_edge": x_left_edge,
+            "x_right_edge": x_right_edge,
             "pde_points": int(pde_x.size * pde_t.size),
             "ic_points": int(x.size),
             "bc_points": int(bc_t.size),
@@ -188,16 +187,19 @@ def _load_advection_hdf5(path: str, sample_id: int) -> dict[str, np.ndarray]:
             f"Expected 2D tensor sample after squeeze, got shape {z.shape} "
             f"for sample_id={sample_id}"
         )
-    if z.shape == (t.size, x.size):
-        pass
-    elif z.shape == (x.size, t.size):
+    if z.shape[0] != t.size:
+        if z.shape[1] != t.size:
+            raise ValueError(
+                f"Expected one tensor axis to match t-coordinate length {t.size}, "
+                f"got {z.shape} for sample_id={sample_id}"
+            )
         z = z.T
-    else:
+    if x.size not in (z.shape[1], z.shape[1] + 1):
         raise ValueError(
-            f"Expected tensor sample shape {(t.size, x.size)} or {(x.size, t.size)}, "
-            f"got {z.shape} for sample_id={sample_id}"
+            f"Expected x-coordinate length {z.shape[1]} for point coordinates or "
+            f"{z.shape[1] + 1} for cell edges, got {x.size}"
         )
-    if x.size < 3 or t.size < 2:
+    if z.shape[1] < 3 or t.size < 2:
         raise ValueError("HDF5 Advection data must contain at least 3 x-points and 2 t-points")
     return {"x": x, "t": t, "z": z}
 
@@ -216,6 +218,62 @@ def _resolve_time_index(t: np.ndarray, target_time: float, tolerance: float) -> 
     if matches.size:
         return int(matches[0])
     return int(np.argmin(np.abs(t - target_time)))
+
+
+def _resolve_spatial_grid(
+    x: np.ndarray,
+    nx_data: int,
+    x_coordinate_type: str,
+) -> tuple[np.ndarray, float, float, str]:
+    kind = x_coordinate_type.lower()
+    if kind not in {"auto", "cell_center", "cell_edge", "node"}:
+        raise ValueError(
+            "x_coordinate_type must be one of: auto, cell_center, cell_edge, node"
+        )
+
+    if kind == "auto":
+        if x.size == nx_data + 1:
+            kind = "cell_edge"
+        elif _looks_like_closed_interval(x):
+            kind = "node"
+        else:
+            kind = "cell_center"
+
+    if kind == "cell_edge":
+        if x.size != nx_data + 1:
+            raise ValueError(
+                f"cell_edge x-coordinate must have length {nx_data + 1}, got {x.size}"
+            )
+        _uniform_spacing(x)
+        x_values = 0.5 * (x[:-1] + x[1:])
+        return x_values, float(x[0]), float(x[-1]), kind
+
+    if x.size != nx_data:
+        raise ValueError(f"{kind} x-coordinate must have length {nx_data}, got {x.size}")
+
+    dx = _uniform_spacing(x)
+    if kind == "node":
+        return x, float(x[0]), float(x[-1]), kind
+    return x, float(x[0] - 0.5 * dx), float(x[-1] + 0.5 * dx), kind
+
+
+def _looks_like_closed_interval(values: np.ndarray) -> bool:
+    if values.size < 2:
+        return False
+    return bool(
+        np.isclose(values[0], 0.0, rtol=1e-6, atol=1e-8)
+        and np.isclose(values[-1], 1.0, rtol=1e-6, atol=1e-8)
+    )
+
+
+def _uniform_spacing(values: np.ndarray) -> float:
+    if values.size < 2:
+        raise ValueError("Coordinate array must contain at least two points")
+    spacings = np.diff(values)
+    dx = float(np.mean(spacings))
+    if not np.allclose(spacings, dx, rtol=1e-5, atol=1e-8):
+        raise ValueError("Advection HDF5 x-coordinate must be uniformly spaced")
+    return dx
 
 
 def _column_tensor(values: np.ndarray, device: torch.device) -> torch.Tensor:

@@ -1,7 +1,7 @@
 {
   "equation": "advection",
   "equation_params": {
-    "beta": 7.0,
+    "beta": 0.7,
     "data_path": "../hdf5-files/1D_Advection_one_harmonic.hdf5",
     "sample_id": 0,
     "target_time": 0.0
@@ -24,7 +24,7 @@
     "pool_sizes": {},
     "optimizer_mode": "adam",
     "optimizer": "adam",
-    "lr": 0.1,
+    "lr": 0.01,
     "weight_decay": 0.0,
     "scheduler": "cosine",
     "scheduler_kwargs": {
