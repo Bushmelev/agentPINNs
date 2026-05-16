@@ -7,12 +7,22 @@
     "target_time": 0.0
   },
   "controllers": ["fixed", "tiny_loss_weight"],
+  "sweep_rewards": [
+    "loss_l2_hybrid",
+    "component_balance_penalty",
+    "progressive_loss_l2_hybrid"
+  ],
+  "sweep_agent_checkpoints": {
+    "loss_l2_hybrid": "CHANGE_ME/burgers/agent_loss_l2_hybrid/agent_checkpoint.pt",
+    "component_balance_penalty": "CHANGE_ME/burgers/agent_component_balance_penalty/agent_checkpoint.pt",
+    "progressive_loss_l2_hybrid": "CHANGE_ME/burgers/agent_progressive_loss_l2_hybrid/agent_checkpoint.pt"
+  },
   "seed": 1234,
   "device": "auto",
   "output_dir": "artifacts/advection_transfer",
   "save_plots": true,
   "plot_grid": 120,
-  "solution_slice_times": [0.5, 1.0],
+  "solution_slice_times": [0.5, 1.0, 1.5, 2.0],
   "model": {
     "layers": [2, 40, 40, 40, 40, 1],
     "activation": "tanh"
@@ -22,13 +32,17 @@
     "full_batch": true,
     "batch_sizes": {},
     "pool_sizes": {},
-    "optimizer_mode": "adam_lbfgs",
+    "optimizer_mode": "adam",
     "optimizer": "adam",
-    "lr": 0.001,
+    "lr": 0.01,
     "weight_decay": 0.0,
-    "scheduler": "constant",
-    "adam_steps": 5000,
-    "lbfgs_steps": 5000,
+    "scheduler": "cosine",
+    "scheduler_kwargs": {
+      "t_max": 10000,
+      "eta_min": 1e-5
+    },
+    "adam_steps": 10000,
+    "lbfgs_steps": 0,
     "lbfgs_lr": 1.0,
     "lbfgs_max_iter": 1,
     "lbfgs_max_eval": null,
@@ -40,7 +54,7 @@
     "log_every": 100,
     "relative_l2_every": 1,
     "relative_l2_chunk_size": 65536,
-    "agent_update_interval": 5,
+    "agent_update_interval": 10,
     "agent_warmup_steps": 0,
     "freeze_weights_during_lbfgs": true,
     "freeze_agent_during_lbfgs": true,
@@ -48,7 +62,7 @@
   },
   "controller_params": {
     "tiny_loss_weight": {
-      "reward": "component_relative_improvement",
+      "reward": "component_balance_penalty",
       "sigma": 0.1,
       "learn_sigma": false,
       "sigma_min": 0.0001,

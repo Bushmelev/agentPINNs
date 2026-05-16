@@ -136,10 +136,34 @@ def _selected_rewards(config_payload: dict[str, Any], value: str | None) -> list
     if value is not None:
         rewards = [item.strip() for item in value.split(",") if item.strip()]
         return _validate_rewards(rewards)
+    checkpoints = config_payload.get("sweep_agent_checkpoints")
+    if isinstance(checkpoints, dict):
+        rewards = [str(reward) for reward in checkpoints]
+        return _validate_rewards(rewards)
     rewards = config_payload.get("sweep_rewards", ALL_REWARDS)
     if not isinstance(rewards, list) or not all(isinstance(item, str) for item in rewards):
         raise ValueError("sweep_rewards must be a list of reward names")
     return _validate_rewards(rewards)
+
+
+def _selected_agent_checkpoints(
+    config_payload: dict[str, Any],
+    rewards: list[str],
+) -> dict[str, str]:
+    checkpoints = config_payload.get("sweep_agent_checkpoints", {})
+    if checkpoints is None:
+        return {}
+    if not isinstance(checkpoints, dict):
+        raise ValueError("sweep_agent_checkpoints must be an object: reward -> checkpoint path")
+    selected: dict[str, str] = {}
+    for reward in rewards:
+        value = checkpoints.get(reward)
+        if value is not None:
+            selected[reward] = str(value)
+    missing = sorted(set(rewards) - set(selected)) if checkpoints else []
+    if missing:
+        raise ValueError(f"Missing sweep_agent_checkpoints for rewards: {missing}")
+    return selected
 
 
 def _apply_overrides(cfg: ExperimentConfig, args: argparse.Namespace) -> ExperimentConfig:
@@ -457,7 +481,9 @@ def main() -> None:
     args = parse_args()
     config_payload = json.loads(args.config.read_text(encoding="utf-8"))
     rewards = _selected_rewards(config_payload, args.rewards)
+    agent_checkpoints = _selected_agent_checkpoints(config_payload, rewards)
     config_payload.pop("sweep_rewards", None)
+    config_payload.pop("sweep_agent_checkpoints", None)
     cfg = _apply_overrides(ExperimentConfig.from_dict(config_payload), args)
 
     configure_torch()
@@ -466,6 +492,8 @@ def main() -> None:
     store = ArtifactStore.create(cfg.output_dir)
     store.save_json(store.root / "reward_sweep_config.json", cfg.to_dict())
     store.save_json(store.root / "reward_sweep_rewards.json", rewards)
+    if agent_checkpoints:
+        store.save_json(store.root / "reward_sweep_agent_checkpoints.json", agent_checkpoints)
     print(f"Device: {device}")
     print(f"Run: {store.root}")
 
@@ -497,6 +525,9 @@ def main() -> None:
         print(f"[{spec.name}/agent] reward={reward}")
         params = _controller_params(cfg, "tiny_loss_weight")
         params["reward"] = reward
+        if reward in agent_checkpoints:
+            params["frozen_agent_checkpoint"] = agent_checkpoints[reward]
+            params["trainable"] = False
         controller = make_controller(
             "tiny_loss_weight",
             params,
