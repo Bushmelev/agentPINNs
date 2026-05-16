@@ -6,36 +6,29 @@
     "sample_id": 0,
     "target_time": 0.0
   },
-  "controllers": ["fixed", "tiny_loss_weight"],
-  "sweep_rewards": [
-    "log_ratio",
-    "relative_improvement",
-    "component_relative_improvement",
-    "baseline_gap",
-    "normalized_baseline_gap",
-    "normalized_baseline_gap_delta",
-    "relative_l2_improvement",
-    "relative_l2_baseline_gap",
-    "relative_l2_baseline_gap_delta",
-    "log_normalized_baseline_gap",
-    "component_baseline_gap",
-    "worst_component_baseline_gap",
-    "loss_l2_hybrid",
-    "progressive_loss_l2_hybrid",
-    "worst_component_relative_improvement",
-    "component_balance_penalty",
-    "relative_l2_log_improvement",
-    "loss_l2_self_hybrid",
-    "running_best_l2_reward"
+  "controllers": [
+    "fixed"
   ],
   "seed": 1234,
   "device": "auto",
-  "output_dir": "artifacts/reward_sweep",
+  "output_dir": "artifacts/fixed_cosine_scheduler",
   "save_plots": true,
   "plot_grid": 120,
-  "solution_slice_times": [0.5, 1.0, 1.5, 2.0],
+  "solution_slice_times": [
+    0.5,
+    1.0,
+    1.5,
+    2.0
+  ],
   "model": {
-    "layers": [2, 40, 40, 40, 40, 1],
+    "layers": [
+      2,
+      40,
+      40,
+      40,
+      40,
+      1
+    ],
     "activation": "tanh"
   },
   "training": {
@@ -44,13 +37,13 @@
     "batch_sizes": {},
     "pool_sizes": {},
     "optimizer_mode": "adam",
-    "optimizer": "adam",
+    "optimizer": "adamw",
     "lr": 0.01,
-    "weight_decay": 0.0,
+    "weight_decay": 0.0001,
     "scheduler": "cosine",
     "scheduler_kwargs": {
       "t_max": 10000,
-      "eta_min": 1e-5
+      "eta_min": 1e-05
     },
     "adam_steps": 10000,
     "lbfgs_steps": 0,
@@ -58,13 +51,14 @@
     "lbfgs_max_iter": 1,
     "lbfgs_max_eval": null,
     "lbfgs_history_size": 20,
-    "lbfgs_tolerance_grad": 1e-7,
-    "lbfgs_tolerance_change": 1e-9,
+    "lbfgs_tolerance_grad": 1e-07,
+    "lbfgs_tolerance_change": 1e-09,
     "lbfgs_line_search_fn": "strong_wolfe",
+    "lbfgs_weight_mode": "controller",
     "log_every": 100,
     "relative_l2_every": 1,
     "relative_l2_chunk_size": 65536,
-    "agent_update_interval": 10,
+    "agent_update_interval": 5,
     "agent_warmup_steps": 0,
     "freeze_weights_during_lbfgs": true,
     "freeze_agent_during_lbfgs": true,
@@ -72,19 +66,30 @@
   },
   "controller_params": {
     "tiny_loss_weight": {
-      "reward": "baseline_gap",
+      "reward": "normalized_baseline_gap",
       "sigma": 0.1,
       "learn_sigma": false,
       "sigma_min": 0.0001,
       "sigma_max": null,
       "action_scale": 0.1,
       "min_weight_share": 0.1,
-      "max_weight_share": 0.8,
+      "max_weight_share": 0.7,
       "include_log_losses": false,
       "include_initial_loss_ratios": true,
       "policy_bias": false,
-      "policy_hidden_dim": 4,
+      "policy_hidden_dim": null,
       "zero_init_policy": true
+    },
+    "softadapt": {
+      "temperature": 1.0
+    },
+    "relobralo": {
+      "alpha": 0.999,
+      "beta": 0.99,
+      "tau": 1.0
+    },
+    "gradnorm": {
+      "alpha": 1.0
     }
   }
 }
