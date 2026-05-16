@@ -116,6 +116,23 @@ def parse_args() -> argparse.Namespace:
         help="Optional x-axis limits as min,max for zoomed slice plots.",
     )
     parser.add_argument(
+        "--auto-xlim",
+        choices=["none", "reference-gradient", "max-error", "max-vs-fixed"],
+        default="none",
+        help=(
+            "Choose a separate x-axis window for each time slice. "
+            "reference-gradient follows the steepest reference front; "
+            "max-error follows the largest model error; max-vs-fixed follows "
+            "where selected models are worse than fixed."
+        ),
+    )
+    parser.add_argument(
+        "--x-window",
+        type=float,
+        default=0.5,
+        help="Width of each per-time auto-xlim window.",
+    )
+    parser.add_argument(
         "--ylim",
         help="Optional y-axis limits as min,max for zoomed slice plots.",
     )
@@ -408,6 +425,73 @@ def select_worst_times(
     return sorted(row["time"] for row in selected)
 
 
+def window_limits(x: np.ndarray, center: float, width: float) -> tuple[float, float]:
+    if width <= 0.0:
+        raise ValueError("--x-window must be positive")
+    x_min = float(np.min(x))
+    x_max = float(np.max(x))
+    width = min(float(width), x_max - x_min)
+    lower = center - 0.5 * width
+    upper = center + 0.5 * width
+    if lower < x_min:
+        upper += x_min - lower
+        lower = x_min
+    if upper > x_max:
+        lower -= upper - x_max
+        upper = x_max
+    lower = max(lower, x_min)
+    upper = min(upper, x_max)
+    return float(lower), float(upper)
+
+
+def score_model_names(names: list[str]) -> list[str]:
+    return [name for name in names if name != "fixed"] or names
+
+
+def auto_xlim_for_slice(
+    *,
+    x: np.ndarray,
+    reference_slice: np.ndarray | None,
+    predictions: dict[str, np.ndarray],
+    mode: str,
+    width: float,
+) -> tuple[float, float] | None:
+    if mode == "none":
+        return None
+    if reference_slice is None:
+        raise ValueError("--auto-xlim requires equation reference solution")
+
+    if mode == "reference-gradient":
+        if len(x) < 2:
+            return window_limits(x, float(x[0]), width)
+        gradient = np.abs(np.gradient(reference_slice, x))
+        center = float(x[int(np.argmax(gradient))])
+        return window_limits(x, center, width)
+
+    names = score_model_names(list(predictions))
+    if mode == "max-error":
+        error = np.zeros_like(reference_slice, dtype=np.float64)
+        for name in names:
+            error = np.maximum(error, np.abs(predictions[name] - reference_slice))
+        center = float(x[int(np.argmax(error))])
+        return window_limits(x, center, width)
+
+    if mode == "max-vs-fixed":
+        if "fixed" not in predictions:
+            raise ValueError("--auto-xlim max-vs-fixed requires fixed in --rewards")
+        fixed_error = np.abs(predictions["fixed"] - reference_slice)
+        excess = np.full_like(reference_slice, -np.inf, dtype=np.float64)
+        for name in names:
+            excess = np.maximum(excess, np.abs(predictions[name] - reference_slice) - fixed_error)
+        if not np.isfinite(excess).any():
+            center = float(x[int(len(x) // 2)])
+        else:
+            center = float(x[int(np.argmax(excess))])
+        return window_limits(x, center, width)
+
+    raise ValueError(f"Unknown auto-xlim mode: {mode}")
+
+
 def plot_slices(
     *,
     models: dict[str, torch.nn.Module],
@@ -419,6 +503,8 @@ def plot_slices(
     colors: dict[str, str],
     chunk_size: int,
     xlim: tuple[float, float] | None = None,
+    auto_xlim: str = "none",
+    x_window: float = 0.5,
     ylim: tuple[float, float] | None = None,
 ) -> None:
     reference = reference_grid(spec)
@@ -451,15 +537,18 @@ def plot_slices(
     axes_flat = axes.reshape(-1)
     handles = []
     labels = []
+    zoom_rows: list[dict[str, float | str]] = []
 
     for plot_idx, (axis, requested_time) in enumerate(zip(axes_flat, valid_times)):
         plot_time = requested_time
+        reference_slice = None
         if t_ref is not None and u_ref is not None:
             time_index = int(np.argmin(np.abs(t_ref - requested_time)))
             plot_time = float(t_ref[time_index])
+            reference_slice = u_ref[:, time_index]
             (line,) = axis.plot(
                 x,
-                u_ref[:, time_index],
+                reference_slice,
                 label="reference",
                 color="#000000",
                 linewidth=2.0,
@@ -469,8 +558,30 @@ def plot_slices(
                 handles.append(line)
                 labels.append("reference")
 
+        predictions: dict[str, np.ndarray] = {}
         for name, model in models.items():
-            prediction = predict_slice(model, x, plot_time, device, chunk_size)
+            predictions[name] = predict_slice(model, x, plot_time, device, chunk_size)
+
+        panel_xlim = xlim
+        if panel_xlim is None:
+            panel_xlim = auto_xlim_for_slice(
+                x=x,
+                reference_slice=reference_slice,
+                predictions=predictions,
+                mode=auto_xlim,
+                width=x_window,
+            )
+        if panel_xlim is not None:
+            zoom_rows.append(
+                {
+                    "time": float(plot_time),
+                    "x_min": float(panel_xlim[0]),
+                    "x_max": float(panel_xlim[1]),
+                    "mode": auto_xlim if xlim is None else "manual",
+                }
+            )
+
+        for name, prediction in predictions.items():
             (line,) = axis.plot(
                 x,
                 prediction,
@@ -487,8 +598,8 @@ def plot_slices(
         if plot_idx // ncols == nrows - 1:
             axis.set_xlabel("x")
         axis.set_ylabel("u")
-        if xlim is not None:
-            axis.set_xlim(*xlim)
+        if panel_xlim is not None:
+            axis.set_xlim(*panel_xlim)
         if ylim is not None:
             axis.set_ylim(*ylim)
         axis.grid(True, ls="--", alpha=0.3)
@@ -505,6 +616,11 @@ def plot_slices(
         fontsize=8,
     )
     out_dir.mkdir(parents=True, exist_ok=True)
+    if zoom_rows:
+        (out_dir / "zoom_windows.json").write_text(
+            json.dumps(zoom_rows, indent=2),
+            encoding="utf-8",
+        )
     for fmt in formats:
         fig.savefig(out_dir / f"solution_slices.{fmt}", dpi=180, bbox_inches="tight")
     plt.close(fig)
@@ -543,6 +659,8 @@ def main() -> None:
         )
     colors = load_color_map(args.color_map, names)
     xlim = parse_limits(args.xlim, "--xlim")
+    if xlim is not None and args.auto_xlim != "none":
+        raise ValueError("Use either --xlim or --auto-xlim, not both")
     ylim = parse_limits(args.ylim, "--ylim")
     plot_slices(
         models=models,
@@ -554,6 +672,8 @@ def main() -> None:
         colors=colors,
         chunk_size=max(1, int(args.chunk_size)),
         xlim=xlim,
+        auto_xlim=args.auto_xlim,
+        x_window=float(args.x_window),
         ylim=ylim,
     )
     print(f"Saved solution slices to {out_dir}")
