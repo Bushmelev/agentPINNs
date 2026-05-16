@@ -111,6 +111,14 @@ def parse_args() -> argparse.Namespace:
         default=65536,
         help="Prediction chunk size.",
     )
+    parser.add_argument(
+        "--xlim",
+        help="Optional x-axis limits as min,max for zoomed slice plots.",
+    )
+    parser.add_argument(
+        "--ylim",
+        help="Optional y-axis limits as min,max for zoomed slice plots.",
+    )
     return parser.parse_args()
 
 
@@ -177,6 +185,18 @@ def parse_times(value: str | None, cfg: ExperimentConfig) -> list[float]:
     if value is None:
         return [float(item) for item in cfg.solution_slice_times]
     return [float(item) for item in parse_csv(value)]
+
+
+def parse_limits(value: str | None, name: str) -> tuple[float, float] | None:
+    if value is None:
+        return None
+    parts = parse_csv(value)
+    if len(parts) != 2:
+        raise ValueError(f"{name} must have exactly two comma-separated values")
+    lower, upper = float(parts[0]), float(parts[1])
+    if lower >= upper:
+        raise ValueError(f"{name} lower limit must be smaller than upper limit")
+    return lower, upper
 
 
 def method_dir(equation_dir: Path, name: str) -> Path:
@@ -398,6 +418,8 @@ def plot_slices(
     formats: list[str],
     colors: dict[str, str],
     chunk_size: int,
+    xlim: tuple[float, float] | None = None,
+    ylim: tuple[float, float] | None = None,
 ) -> None:
     reference = reference_grid(spec)
     if reference is None:
@@ -465,6 +487,10 @@ def plot_slices(
         if plot_idx // ncols == nrows - 1:
             axis.set_xlabel("x")
         axis.set_ylabel("u")
+        if xlim is not None:
+            axis.set_xlim(*xlim)
+        if ylim is not None:
+            axis.set_ylim(*ylim)
         axis.grid(True, ls="--", alpha=0.3)
 
     for axis in axes_flat[len(valid_times) :]:
@@ -516,6 +542,8 @@ def main() -> None:
             chunk_size=max(1, int(args.chunk_size)),
         )
     colors = load_color_map(args.color_map, names)
+    xlim = parse_limits(args.xlim, "--xlim")
+    ylim = parse_limits(args.ylim, "--ylim")
     plot_slices(
         models=models,
         spec=spec,
@@ -525,6 +553,8 @@ def main() -> None:
         formats=formats,
         colors=colors,
         chunk_size=max(1, int(args.chunk_size)),
+        xlim=xlim,
+        ylim=ylim,
     )
     print(f"Saved solution slices to {out_dir}")
 
