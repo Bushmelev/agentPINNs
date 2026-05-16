@@ -20,7 +20,6 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import torch  # noqa: E402
 
-from pinn_accel.checkpoints import load_checkpoint_payload  # noqa: E402
 from pinn_accel.config import ExperimentConfig  # noqa: E402
 from pinn_accel.equations import get_equation  # noqa: E402
 from pinn_accel.equations.base import EquationSpec  # noqa: E402
@@ -68,6 +67,21 @@ def parse_args() -> argparse.Namespace:
         help="Comma-separated time values. Default: solution_slice_times from config.",
     )
     parser.add_argument(
+        "--auto-times",
+        choices=["none", "max-relative-l2", "mean-relative-l2", "max-vs-fixed"],
+        default="none",
+        help=(
+            "Choose times automatically from per-time-slice relative L2. "
+            "Scoring ignores fixed unless only fixed is selected."
+        ),
+    )
+    parser.add_argument(
+        "--num-times",
+        type=int,
+        default=4,
+        help="Number of automatic worst times to plot.",
+    )
+    parser.add_argument(
         "--equation",
         help="Equation folder/config name if root contains multiple equations.",
     )
@@ -78,7 +92,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--formats",
-        default="pdf,png",
+        default="pdf",
         help="Comma-separated output formats, e.g. pdf,png.",
     )
     parser.add_argument(
@@ -179,6 +193,22 @@ def method_dir(equation_dir: Path, name: str) -> Path:
     )
 
 
+def load_checkpoint_payload(
+    path: Path,
+    *,
+    map_location: str | torch.device,
+) -> dict[str, Any]:
+    if not path.is_file():
+        raise FileNotFoundError(f"Checkpoint not found: {path}")
+    try:
+        payload = torch.load(path, map_location=map_location, weights_only=True)
+    except TypeError:
+        payload = torch.load(path, map_location=map_location)
+    if not isinstance(payload, dict):
+        raise ValueError(f"Checkpoint payload must be a dict: {path}")
+    return payload
+
+
 def load_model(checkpoint_path: Path, device: torch.device) -> torch.nn.Module:
     payload = load_checkpoint_payload(checkpoint_path, map_location=device)
     model_cfg = payload.get("model_config", {})
@@ -233,6 +263,129 @@ def load_color_map(path: Path | None, names: list[str]) -> dict[str, str]:
     for idx, name in enumerate(name for name in names if name not in colors):
         colors[name] = DEFAULT_COLORS[idx % len(DEFAULT_COLORS)]
     return colors
+
+
+def slice_relative_l2(
+    prediction: np.ndarray,
+    reference: np.ndarray,
+) -> float:
+    numerator = float(np.sum((prediction - reference) ** 2))
+    denominator = max(float(np.sum(reference**2)), 1e-12)
+    return float(np.sqrt(numerator / denominator))
+
+
+def score_methods(names: list[str]) -> list[str]:
+    non_fixed = [name for name in names if name != "fixed"]
+    return non_fixed or names
+
+
+def score_slice(
+    row: dict[str, float],
+    *,
+    mode: str,
+    names: list[str],
+) -> float:
+    candidates = score_methods(names)
+    if mode == "max-relative-l2":
+        return max(row[name] for name in candidates)
+    if mode == "mean-relative-l2":
+        return float(np.mean([row[name] for name in candidates]))
+    if mode == "max-vs-fixed":
+        if "fixed" not in row:
+            raise ValueError("--auto-times max-vs-fixed requires fixed in --rewards")
+        return max(row[name] - row["fixed"] for name in candidates)
+    raise ValueError(f"Unknown auto-times mode: {mode}")
+
+
+def compute_slice_l2_table(
+    *,
+    models: dict[str, torch.nn.Module],
+    reference: tuple[np.ndarray, np.ndarray, np.ndarray],
+    device: torch.device,
+    chunk_size: int,
+    score_mode: str,
+) -> list[dict[str, float]]:
+    x, t_values, u_ref = reference
+    names = list(models)
+    rows: list[dict[str, float]] = []
+    for time_index, t_value in enumerate(t_values):
+        row: dict[str, float] = {
+            "time": float(t_value),
+            "time_index": float(time_index),
+        }
+        reference_slice = u_ref[:, time_index]
+        for name, model in models.items():
+            prediction = predict_slice(
+                model,
+                x,
+                float(t_value),
+                device,
+                chunk_size,
+            )
+            row[name] = slice_relative_l2(prediction, reference_slice)
+        row["score"] = score_slice(row, mode=score_mode, names=names)
+        rows.append(row)
+    return rows
+
+
+def write_slice_l2_table(
+    rows: list[dict[str, float]],
+    names: list[str],
+    path: Path,
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    columns = ["time_index", "time", *names, "score"]
+    with path.open("w", encoding="utf-8") as file:
+        file.write(",".join(columns) + "\n")
+        for row in rows:
+            file.write(
+                ",".join(
+                    f"{row[column]:.12g}" if column in row else ""
+                    for column in columns
+                )
+                + "\n"
+            )
+
+
+def select_worst_times(
+    *,
+    models: dict[str, torch.nn.Module],
+    spec: EquationSpec,
+    device: torch.device,
+    out_dir: Path,
+    num_times: int,
+    score_mode: str,
+    chunk_size: int,
+) -> list[float]:
+    reference = reference_grid(spec)
+    if reference is None:
+        raise ValueError("--auto-times requires equation reference solution")
+    rows = compute_slice_l2_table(
+        models=models,
+        reference=reference,
+        device=device,
+        chunk_size=chunk_size,
+        score_mode=score_mode,
+    )
+    names = list(models)
+    write_slice_l2_table(rows, names, out_dir / "slice_relative_l2.csv")
+    ranked = sorted(rows, key=lambda row: row["score"], reverse=True)
+    selected = ranked[: max(1, int(num_times))]
+    payload = {
+        "score_mode": score_mode,
+        "selected_times": [row["time"] for row in selected],
+        "selected": selected,
+    }
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "selected_times.json").write_text(
+        json.dumps(payload, indent=2),
+        encoding="utf-8",
+    )
+    print("Selected worst slice times:")
+    for row in selected:
+        values = " ".join(f"{name}={row[name]:.4e}" for name in names)
+        print(f"  t={row['time']:.6g} score={row['score']:.4e} {values}")
+    return sorted(row["time"] for row in selected)
 
 
 def plot_slices(
@@ -341,7 +494,6 @@ def main() -> None:
     names = parse_csv(args.rewards)
     if not names:
         raise SystemExit("--rewards must contain at least one method")
-    times = parse_times(args.times, cfg)
     out_dir = args.out or equation_dir / "reward_sweep" / "solution_slices_selected"
     formats = parse_csv(args.formats)
     if not formats:
@@ -351,6 +503,18 @@ def main() -> None:
         name: load_model(method_dir(equation_dir, name) / "checkpoint.pt", device)
         for name in names
     }
+    if args.auto_times == "none":
+        times = parse_times(args.times, cfg)
+    else:
+        times = select_worst_times(
+            models=models,
+            spec=spec,
+            device=device,
+            out_dir=out_dir,
+            num_times=args.num_times,
+            score_mode=args.auto_times,
+            chunk_size=max(1, int(args.chunk_size)),
+        )
     colors = load_color_map(args.color_map, names)
     plot_slices(
         models=models,
