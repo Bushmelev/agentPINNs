@@ -6,20 +6,10 @@
     "sample_id": 0,
     "target_time": 0.0
   },
-  "controllers": ["fixed", "tiny_loss_weight"],
-  "sweep_rewards": [
-    "loss_l2_hybrid",
-    "component_balance_penalty",
-    "progressive_loss_l2_hybrid"
-  ],
-  "sweep_agent_checkpoints": {
-    "loss_l2_hybrid": "/home/jovyan/VKR-new/artifacts/reward_sweep/20260516_100149_470679/burgers/agent_loss_l2_hybrid/agent_checkpoint.pt",
-    "component_balance_penalty": "/home/jovyan/VKR-new/artifacts/reward_sweep/20260516_100149_470679/burgers/agent_component_balance_penalty/agent_checkpoint.pt",
-    "progressive_loss_l2_hybrid": "/home/jovyan/VKR-new/artifacts/reward_sweep/20260516_100149_470679/burgers/agent_progressive_loss_l2_hybrid/agent_checkpoint.pt"
-  },
+  "controllers": ["fixed"],
   "seed": 1,
   "device": "auto",
-  "output_dir": "artifacts/advection_transfer",
+  "output_dir": "artifacts/advection_fixed",
   "save_plots": true,
   "plot_grid": 120,
   "solution_slice_times": [0.5, 1.0, 1.5, 2.0],
@@ -34,7 +24,7 @@
     "pool_sizes": {},
     "optimizer_mode": "adam",
     "optimizer": "adam",
-    "lr": 0.001,
+    "lr": 0.1,
     "weight_decay": 0.0,
     "scheduler": "cosine",
     "scheduler_kwargs": {
@@ -59,20 +49,5 @@
     "freeze_agent_during_lbfgs": true,
     "compile_model": false
   },
-  "controller_params": {
-    "tiny_loss_weight": {
-      "sigma": 0.1,
-      "learn_sigma": false,
-      "sigma_min": 0.0001,
-      "sigma_max": null,
-      "action_scale": 0.1,
-      "min_weight_share": 0.1,
-      "max_weight_share": 0.8,
-      "include_log_losses": false,
-      "include_initial_loss_ratios": true,
-      "policy_bias": false,
-      "policy_hidden_dim": 4,
-      "zero_init_policy": true
-    }
-  }
+  "controller_params": {}
 }

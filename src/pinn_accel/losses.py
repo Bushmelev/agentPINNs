@@ -79,6 +79,11 @@ class ComponentSampler:
             x=self.pool.x.index_select(0, indices),
             t=self.pool.t.index_select(0, indices),
             y=None if self.pool.y is None else self.pool.y.index_select(0, indices),
+            aux=(
+                None
+                if self.pool.aux is None
+                else self.pool.aux.index_select(0, indices)
+            ),
         )
 
     def describe(self) -> dict[str, int | str | bool | None]:
@@ -180,9 +185,12 @@ class LossEvaluator:
 
         for constraint in self.spec.constraints:
             batch = batches[constraint.name]
-            prediction = model(batch.xt)
-            target = constraint.target_fn(batch, self.spec)
-            by_name[constraint.name] = mse(prediction, target)
+            if constraint.loss_fn is not None:
+                by_name[constraint.name] = constraint.loss_fn(model, batch, self.spec)
+            else:
+                prediction = model(batch.xt)
+                target = constraint.target_fn(batch, self.spec)
+                by_name[constraint.name] = mse(prediction, target)
 
         values = torch.stack([by_name[name] for name in self.component_names])
         return LossPack(names=list(self.component_names), values=values, by_name=by_name)

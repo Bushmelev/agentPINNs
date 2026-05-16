@@ -86,24 +86,30 @@ def build_advection_hdf5(
         generator: torch.Generator | None = None,
     ) -> SampleBatch:
         del n, spec, generator
-        t_t = _column_tensor(np.concatenate([bc_t, bc_t]), device)
-        x_t = _column_tensor(
-            np.concatenate(
-                [
-                    np.full_like(bc_t, x[0], dtype=np.float64),
-                    np.full_like(bc_t, x[-1], dtype=np.float64),
-                ]
-            ),
-            device,
-        )
-        y_t = _column_tensor(np.concatenate([z[1:, 0], z[1:, -1]]), device)
-        return SampleBatch(xt=torch.cat([x_t, t_t], dim=1), x=x_t, t=t_t, y=y_t)
+        t_t = _column_tensor(bc_t, device)
+        x_left = _column_tensor(np.full_like(bc_t, x[0], dtype=np.float64), device)
+        x_right = _column_tensor(np.full_like(bc_t, x[-1], dtype=np.float64), device)
+        left_xt = torch.cat([x_left, t_t], dim=1)
+        right_xt = torch.cat([x_right, t_t], dim=1)
+        return SampleBatch(xt=left_xt, x=x_left, t=t_t, aux=right_xt)
 
     def data_target(batch: SampleBatch, spec: EquationSpec) -> torch.Tensor:
         del spec
         if batch.y is None:
             raise ValueError("HDF5 target batch is missing y values")
         return batch.y
+
+    def periodic_bc_loss(
+        model: nn.Module,
+        batch: SampleBatch,
+        spec: EquationSpec,
+    ) -> torch.Tensor:
+        del spec
+        if batch.aux is None:
+            raise ValueError("Periodic boundary batch is missing right-boundary points")
+        left = model(batch.xt)
+        right = model(batch.aux)
+        return torch.mean((left - right) ** 2)
 
     def reference_solver(
         spec: EquationSpec,
@@ -123,7 +129,7 @@ def build_advection_hdf5(
         pde_sampler=pde_sampler,
         constraints=(
             ConstraintSpec("ic", ic_sampler, data_target),
-            ConstraintSpec("bc", bc_sampler, data_target),
+            ConstraintSpec("bc", bc_sampler, data_target, loss_fn=periodic_bc_loss),
         ),
         params={
             "beta": float(beta),
@@ -134,10 +140,11 @@ def build_advection_hdf5(
         default_batch_sizes={
             "pde": int(pde_x.size * pde_t.size),
             "ic": int(x.size),
-            "bc": int(2 * bc_t.size),
+            "bc": int(bc_t.size),
         },
         data_info={
             "source": "hdf5",
+            "bc_type": "periodic",
             "path": str(Path(data_path)),
             "sample_id": int(sample_id),
             "tensor_shape": list(z.shape),
@@ -145,7 +152,7 @@ def build_advection_hdf5(
             "t_points": int(t.size),
             "pde_points": int(pde_x.size * pde_t.size),
             "ic_points": int(x.size),
-            "bc_points": int(2 * bc_t.size),
+            "bc_points": int(bc_t.size),
             "ic_time_index": int(ic_index),
             "ic_time": float(t[ic_index]),
             "beta": float(beta),

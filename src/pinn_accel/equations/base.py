@@ -18,9 +18,11 @@ class SampleBatch:
     x: torch.Tensor
     t: torch.Tensor
     y: torch.Tensor | None = None
+    aux: torch.Tensor | None = None
 
 
 TargetFn = Callable[[SampleBatch, "EquationSpec"], torch.Tensor]
+ConstraintLossFn = Callable[[nn.Module, SampleBatch, "EquationSpec"], torch.Tensor]
 Sampler = Callable[..., SampleBatch]
 ResidualFn = Callable[[nn.Module, torch.Tensor], torch.Tensor]
 ReferenceSolver = Callable[["EquationSpec", int, int], ReferenceSolution]
@@ -31,6 +33,7 @@ class ConstraintSpec:
     name: str
     sampler: Sampler
     target_fn: TargetFn
+    loss_fn: ConstraintLossFn | None = None
 
 
 @dataclass(frozen=True)
